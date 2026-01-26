@@ -28,6 +28,10 @@ type Review = {
   created_at: string;
 };
 
+// ✅ Added: typed row shapes for “select(city)” and “select(target_id)”
+type CityRow = { city: string | null };
+type ReportRow = { target_id: string | null };
+
 function normalizeSpaces(s: string) {
   return s.replace(/\s+/g, " ").trim();
 }
@@ -231,9 +235,11 @@ export default function VenuePage() {
       .limit(1000);
     if (error) return;
 
+    // ✅ FIX: type the rows so row.city is known and no @ts-expect-error needed
+    const rows = (data || []) as CityRow[];
+
     const set = new Set<string>();
-    for (const row of data || []) {
-      // @ts-expect-error supabase loose typing
+    for (const row of rows) {
       if (row.city) set.add(titleCase(row.city));
     }
     setAllCities(Array.from(set).sort((a, b) => a.localeCompare(b)));
@@ -309,10 +315,12 @@ export default function VenuePage() {
       .in("target_id", reviewIds);
 
     if (!reportsRes.error) {
+      // ✅ FIX: type the rows so row.target_id is known and no @ts-expect-error needed
+      const reportRows = (reportsRes.data || []) as ReportRow[];
+
       const next = new Set<string>();
-      for (const row of reportsRes.data || []) {
-        // @ts-expect-error supabase loose typing
-        if (row?.target_id) next.add(row.target_id as string);
+      for (const row of reportRows) {
+        if (row?.target_id) next.add(row.target_id);
       }
       setReportedReviewIds(next);
     }
@@ -990,7 +998,9 @@ export default function VenuePage() {
                               ? `Hours/wk: ${r.hours_weekly}`
                               : "Hours/wk: —"}
                             {" • "}
-                            {r.busy_season ? `Busy: ${r.busy_season}` : "Busy: —"}
+                            {r.busy_season
+                              ? `Busy: ${r.busy_season}`
+                              : "Busy: —"}
                           </div>
 
                           {r.comment ? (
