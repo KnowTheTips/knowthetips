@@ -37,7 +37,6 @@ export default function AdminPage() {
 
     const set = new Set<string>();
     for (const row of data || []) {
-      // @ts-expect-error supabase loose typing
       if (row.city) set.add(titleCase(row.city));
     }
 
