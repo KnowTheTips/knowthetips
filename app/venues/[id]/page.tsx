@@ -183,6 +183,36 @@ export default function VenuePage() {
     () => new Set()
   );
 
+  // ✅ NEW: copy-link UI state
+  const [copied, setCopied] = useState(false);
+
+  // ✅ NEW: Copy the current venue URL
+  async function copyVenueLink() {
+    try {
+      if (typeof window === "undefined") return;
+      const url = window.location.href;
+
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        // Fallback (older browsers)
+        const ta = document.createElement("textarea");
+        ta.value = url;
+        ta.style.position = "fixed";
+        ta.style.left = "-9999px";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1200);
+    } catch {
+      alert("Could not copy link. Please copy from the address bar.");
+    }
+  }
+
   function openReport(reviewId: string) {
     setReportError(null);
     setReportReason("");
@@ -265,7 +295,9 @@ export default function VenuePage() {
     setVenue(data as Venue);
     setEditName((data as Venue).name ?? "");
     setEditCity(titleCase((data as Venue).city ?? ""));
-    setEditType((data as Venue).venue_type ? titleCase((data as Venue).venue_type!) : "");
+    setEditType(
+      (data as Venue).venue_type ? titleCase((data as Venue).venue_type!) : ""
+    );
 
     setVenueLoading(false);
   }
@@ -561,12 +593,25 @@ export default function VenuePage() {
           <Link href="/" className="text-sm text-neutral-700 hover:underline">
             ← Back
           </Link>
-          <button
-            onClick={refreshAll}
-            className="rounded-xl border border-neutral-200 px-3 py-2 text-sm hover:bg-neutral-50"
-          >
-            Refresh
-          </button>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={copyVenueLink}
+              className="rounded-xl border border-neutral-200 px-3 py-2 text-sm hover:bg-neutral-50"
+              type="button"
+              title="Copy this venue link"
+            >
+              {copied ? "Copied!" : "Copy link"}
+            </button>
+
+            <button
+              onClick={refreshAll}
+              className="rounded-xl border border-neutral-200 px-3 py-2 text-sm hover:bg-neutral-50"
+              type="button"
+            >
+              Refresh
+            </button>
+          </div>
         </div>
 
         {venueLoading ? (
@@ -597,6 +642,7 @@ export default function VenuePage() {
                 <button
                   onClick={() => setEditing((v) => !v)}
                   className="rounded-xl border border-neutral-200 px-3 py-2 text-sm hover:bg-neutral-50"
+                  type="button"
                 >
                   {editing ? "Close edit" : "Edit venue"}
                 </button>
@@ -625,7 +671,9 @@ export default function VenuePage() {
                 <div className="rounded-2xl border border-neutral-200 p-4">
                   <div className="text-xs text-neutral-500">Avg hours / wk</div>
                   <div className="mt-1 text-2xl font-semibold">
-                    {summary.avgHours == null ? "—" : Math.round(summary.avgHours)}
+                    {summary.avgHours == null
+                      ? "—"
+                      : Math.round(summary.avgHours)}
                   </div>
                   <div className="mt-1 text-xs text-neutral-500">
                     based on {summary.hoursSample}{" "}
@@ -645,7 +693,9 @@ export default function VenuePage() {
                 <div className="rounded-2xl border border-neutral-200 p-4">
                   <div className="text-xs text-neutral-500">Tip pool</div>
                   <div className="mt-1 text-2xl font-semibold">
-                    {summary.pctTipPool == null ? "—" : fmtPct(summary.pctTipPool)}
+                    {summary.pctTipPool == null
+                      ? "—"
+                      : fmtPct(summary.pctTipPool)}
                   </div>
                   <div className="mt-1 text-xs text-neutral-500">
                     based on {summary.tipPoolSample}{" "}
@@ -674,7 +724,8 @@ export default function VenuePage() {
                     />
                     {editCitySuggestion ? (
                       <p className="text-xs text-neutral-600">
-                        Suggestion: <span className="font-medium">{editCitySuggestion}</span>
+                        Suggestion:{" "}
+                        <span className="font-medium">{editCitySuggestion}</span>
                       </p>
                     ) : null}
                   </div>
@@ -693,12 +744,14 @@ export default function VenuePage() {
                     <button
                       onClick={saveVenueEdits}
                       className="rounded-xl bg-black px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+                      type="button"
                     >
                       Save
                     </button>
                     <button
                       onClick={() => setEditing(false)}
                       className="rounded-xl border border-neutral-200 px-4 py-2 text-sm hover:bg-neutral-50"
+                      type="button"
                     >
                       Cancel
                     </button>
@@ -719,7 +772,9 @@ export default function VenuePage() {
                     <select
                       className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
                       value={reviewSort}
-                      onChange={(e) => setReviewSort(e.target.value as ReviewSort)}
+                      onChange={(e) =>
+                        setReviewSort(e.target.value as ReviewSort)
+                      }
                     >
                       <option value="newest">Newest</option>
                       <option value="oldest">Oldest</option>
@@ -732,7 +787,9 @@ export default function VenuePage() {
                     <input
                       type="checkbox"
                       checked={filterRecommendedOnly}
-                      onChange={(e) => setFilterRecommendedOnly(e.target.checked)}
+                      onChange={(e) =>
+                        setFilterRecommendedOnly(e.target.checked)
+                      }
                     />
                     <span className="text-sm">Recommended only</span>
                   </label>
@@ -753,11 +810,14 @@ export default function VenuePage() {
                       <input
                         type="checkbox"
                         checked={hideMissingForNumericSort}
-                        onChange={(e) => setHideMissingForNumericSort(e.target.checked)}
+                        onChange={(e) =>
+                          setHideMissingForNumericSort(e.target.checked)
+                        }
                       />
                       <span className="text-sm text-neutral-700">
-                        Hide reviews missing {reviewSort === "tips_desc" ? "tips" : "hours"} for
-                        this sort
+                        Hide reviews missing{" "}
+                        {reviewSort === "tips_desc" ? "tips" : "hours"} for this
+                        sort
                       </span>
                     </label>
                   </div>
@@ -765,10 +825,24 @@ export default function VenuePage() {
 
                 <div className="mt-3 text-xs text-neutral-500">
                   Showing{" "}
-                  <span className="font-medium">{filteredSortedReviews.length}</span> of{" "}
-                  <span className="font-medium">{reviews.length}</span> reviews
+                  <span className="font-medium">
+                    {filteredSortedReviews.length}
+                  </span>{" "}
+                  of <span className="font-medium">{reviews.length}</span>{" "}
+                  reviews
                 </div>
               </div>
+
+              {/* ✅ EMPTY STATE COPY (for venues with 0 reviews) */}
+              {!reviewsLoading && !reviewsError && reviews.length === 0 && (
+                <div className="mt-6 rounded-2xl border border-neutral-200 bg-neutral-50 p-5 text-neutral-700">
+                  <p className="font-medium">No reviews yet.</p>
+                  <p className="mt-1 text-sm text-neutral-600">
+                    Be the first to add one — it only takes a minute and helps
+                    other workers.
+                  </p>
+                </div>
+              )}
 
               {/* Add review */}
               <div className="mt-6 rounded-2xl border border-neutral-200 p-4">
@@ -792,7 +866,9 @@ export default function VenuePage() {
                         className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
                         value={earningsLabel}
                         onChange={(e) =>
-                          setEarningsLabel(e.target.value as "pre-tax" | "post-tax")
+                          setEarningsLabel(
+                            e.target.value as "pre-tax" | "post-tax"
+                          )
                         }
                       >
                         <option value="pre-tax">pre-tax</option>
@@ -803,7 +879,9 @@ export default function VenuePage() {
 
                   <div className="grid gap-2 md:grid-cols-2">
                     <label className="grid gap-2">
-                      <span className="text-sm font-medium">Tips / week (optional)</span>
+                      <span className="text-sm font-medium">
+                        Tips / week (optional)
+                      </span>
                       <input
                         inputMode="numeric"
                         className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
@@ -814,7 +892,9 @@ export default function VenuePage() {
                     </label>
 
                     <label className="grid gap-2">
-                      <span className="text-sm font-medium">Hours / week (optional)</span>
+                      <span className="text-sm font-medium">
+                        Hours / week (optional)
+                      </span>
                       <input
                         inputMode="numeric"
                         className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
@@ -846,7 +926,9 @@ export default function VenuePage() {
                   </div>
 
                   <label className="grid gap-2">
-                    <span className="text-sm font-medium">Busy season (optional)</span>
+                    <span className="text-sm font-medium">
+                      Busy season (optional)
+                    </span>
                     <input
                       className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
                       value={busySeason}
@@ -856,7 +938,9 @@ export default function VenuePage() {
                   </label>
 
                   <label className="grid gap-2">
-                    <span className="text-sm font-medium">Comment (optional)</span>
+                    <span className="text-sm font-medium">
+                      Comment (optional)
+                    </span>
                     <textarea
                       className="min-h-[110px] w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
                       value={comment}
@@ -940,9 +1024,14 @@ export default function VenuePage() {
                                 <span className="rounded-full border border-neutral-200 px-2 py-1">
                                   Recommended: {r.recommended ? "Yes" : "No"}
                                 </span>
-                               <span className="rounded-full border border-neutral-200 px-2 py-1">
-  Tip pool: {r.tip_pool === null ? "—" : r.tip_pool ? "Yes" : "No"}
-</span>
+                                <span className="rounded-full border border-neutral-200 px-2 py-1">
+                                  Tip pool:{" "}
+                                  {r.tip_pool === null
+                                    ? "—"
+                                    : r.tip_pool
+                                      ? "Yes"
+                                      : "No"}
+                                </span>
 
                                 {r.busy_season ? (
                                   <span className="rounded-full border border-neutral-200 px-2 py-1">
@@ -957,7 +1046,11 @@ export default function VenuePage() {
                               className="flex items-center gap-2 rounded-xl border border-neutral-200 px-3 py-2 text-xs hover:bg-neutral-50 disabled:opacity-60"
                               onClick={() => openReport(r.id)}
                               disabled={alreadyReported}
-                              title={alreadyReported ? "Already reported" : "Report this review"}
+                              title={
+                                alreadyReported
+                                  ? "Already reported"
+                                  : "Report this review"
+                              }
                             >
                               <FlagIcon className="h-4 w-4" />
                               {alreadyReported ? "Reported" : "Report"}
