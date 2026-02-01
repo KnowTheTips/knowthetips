@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type PlacePick = {
   placeId: string;
@@ -18,30 +18,36 @@ declare global {
   }
 }
 
-function loadScriptOnce(src: string) {
-  return new Promise<void>((resolve, reject) => {
-    const existing = document.querySelector(`script[src="${src}"]`);
-    if (existing) return resolve();
-
-    const s = document.createElement("script");
-    s.src = src;
-    s.async = true;
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error("Failed to load Google script"));
-    document.head.appendChild(s);
-  });
-}
-
 function getCityStateFromPlace(place: any): { city: string; state: string } {
   const comps = place.address_components || [];
   const city =
     comps.find((c: any) => c.types?.includes("locality"))?.long_name ||
     comps.find((c: any) => c.types?.includes("sublocality"))?.long_name ||
-    comps.find((c: any) => c.types?.includes("administrative_area_level_2"))?.long_name ||
+    comps.find((c: any) => c.types?.includes("administrative_area_level_2"))
+      ?.long_name ||
     "";
 
-  const state = comps.find((c: any) => c.types?.includes("administrative_area_level_1"))?.short_name || "";
+  const state =
+    comps.find((c: any) => c.types?.includes("administrative_area_level_1"))
+      ?.short_name || "";
+
   return { city, state };
+}
+
+function waitForGoogleMaps(ms = 8000) {
+  return new Promise<void>((resolve, reject) => {
+    const start = Date.now();
+
+    const tick = () => {
+      if (window.google?.maps?.places) return resolve();
+      if (Date.now() - start > ms) {
+        return reject(new Error("Google Maps did not load in time."));
+      }
+      setTimeout(tick, 50);
+    };
+
+    tick();
+  });
 }
 
 export default function PlacesAutocomplete(props: {
@@ -50,25 +56,36 @@ export default function PlacesAutocomplete(props: {
   defaultValue?: string;
   country?: string; // e.g. "us"
 }) {
-  const { placeholder = "Search a venue…", onPick, defaultValue = "", country = "us" } = props;
+  const { placeholder = "Search a venue…", onPick, defaultValue = "", country = "us" } =
+    props;
 
   const [value, setValue] = useState(defaultValue);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const apiKey = useMemo(() => process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY, []);
-  const scriptSrc = useMemo(() => {
-    const key = apiKey || "";
-    return `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places`;
-  }, [apiKey]);
+  // IMPORTANT: avoid re-initializing Autocomplete when parent re-renders.
+  const onPickRef = useRef(onPick);
+  useEffect(() => {
+    onPickRef.current = onPick;
+  }, [onPick]);
+
+  const apiKeyExists = Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY);
 
   useEffect(() => {
-    let ac: any;
+    let ac: any = null;
+    let canceled = false;
 
     async function init() {
-      if (!apiKey) return; // no key, silently do nothing
-      await loadScriptOnce(scriptSrc);
+      if (!apiKeyExists) return; // no key, silently do nothing
+      if (!inputRef.current) return;
 
-      if (!window.google || !inputRef.current) return;
+      try {
+        await waitForGoogleMaps();
+      } catch {
+        return;
+      }
+
+      if (canceled) return;
+      if (!window.google?.maps?.places) return;
 
       ac = new window.google.maps.places.Autocomplete(inputRef.current, {
         fields: ["place_id", "name", "formatted_address", "geometry", "address_components"],
@@ -82,7 +99,7 @@ export default function PlacesAutocomplete(props: {
 
         const { city, state } = getCityStateFromPlace(place);
 
-        onPick({
+        onPickRef.current({
           placeId: place.place_id,
           name: place.name || "",
           formattedAddress: place.formatted_address || "",
@@ -96,18 +113,19 @@ export default function PlacesAutocomplete(props: {
       });
     }
 
-    init().catch(() => {});
+    init();
 
     return () => {
+      canceled = true;
       ac = null;
     };
-  }, [apiKey, scriptSrc, onPick, country]);
+  }, [apiKeyExists, country]);
 
   return (
     <input
       ref={inputRef}
       className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
-      placeholder={apiKey ? placeholder : "Google key missing — enter manually below"}
+      placeholder={apiKeyExists ? placeholder : "Google key missing — enter manually below"}
       value={value}
       onChange={(e) => setValue(e.target.value)}
     />

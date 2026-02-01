@@ -26,9 +26,9 @@ type Review = {
   comment: string | null;
   earnings_label: string;
   created_at: string;
+  is_hidden: boolean | null;
 };
 
-// ✅ Added: typed row shapes for “select(city)” and “select(target_id)”
 type CityRow = { city: string | null };
 type ReportRow = { target_id: string | null };
 
@@ -41,7 +41,6 @@ function titleCase(s: string) {
   return cleaned.replace(/\b([a-z])/g, (m) => m.toUpperCase());
 }
 
-// --- Typo protection helpers (no libraries) ---
 function levenshtein(a: string, b: string) {
   const s = a.toLowerCase();
   const t = b.toLowerCase();
@@ -235,7 +234,6 @@ export default function VenuePage() {
       .limit(1000);
     if (error) return;
 
-    // ✅ FIX: type the rows so row.city is known and no @ts-expect-error needed
     const rows = (data || []) as CityRow[];
 
     const set = new Set<string>();
@@ -265,28 +263,27 @@ export default function VenuePage() {
     }
 
     setVenue(data as Venue);
-    setEditName(data.name ?? "");
-    setEditCity(titleCase(data.city ?? ""));
-    setEditType(data.venue_type ? titleCase(data.venue_type) : "");
+    setEditName((data as Venue).name ?? "");
+    setEditCity(titleCase((data as Venue).city ?? ""));
+    setEditType((data as Venue).venue_type ? titleCase((data as Venue).venue_type!) : "");
 
     setVenueLoading(false);
   }
 
-  // STEP 5: loadReviews() now ALSO preloads which reviews this browser already reported
-  // so the "Report" button correctly shows "Reported" after refresh/navigation.
+  // ✅ Updated: include rows where is_hidden is NULL or false
   async function loadReviews() {
     if (!venueId) return;
 
     setReviewsLoading(true);
     setReviewsError(null);
 
-    // 1) Load latest reviews
     const reviewsRes = await supabase
       .from("reviews")
       .select(
-        "id,venue_id,role,tips_weekly,hours_weekly,tip_pool,busy_season,recommended,comment,earnings_label,created_at"
+        "id,venue_id,role,tips_weekly,hours_weekly,tip_pool,busy_season,recommended,comment,earnings_label,created_at,is_hidden"
       )
       .eq("venue_id", venueId)
+      .not("is_hidden", "is", true) // ✅ include NULL + false
       .order("created_at", { ascending: false })
       .limit(50);
 
@@ -300,7 +297,6 @@ export default function VenuePage() {
     const reviewRows = (reviewsRes.data || []) as Review[];
     setReviews(reviewRows);
 
-    // 2) Preload "already reported" for only these review IDs
     const reviewIds = reviewRows.map((r) => r.id);
     if (reviewIds.length === 0) {
       setReportedReviewIds(new Set());
@@ -315,7 +311,6 @@ export default function VenuePage() {
       .in("target_id", reviewIds);
 
     if (!reportsRes.error) {
-      // ✅ FIX: type the rows so row.target_id is known and no @ts-expect-error needed
       const reportRows = (reportsRes.data || []) as ReportRow[];
 
       const next = new Set<string>();
@@ -324,7 +319,6 @@ export default function VenuePage() {
       }
       setReportedReviewIds(next);
     }
-    // If reports query fails (RLS/config), we just don't preload — UI still works.
 
     setReviewsLoading(false);
   }
@@ -534,6 +528,7 @@ export default function VenuePage() {
       return;
     }
 
+    // Reset form
     setRecommended(false);
     setComment("");
     setTipsWeekly("");
@@ -630,9 +625,7 @@ export default function VenuePage() {
                 <div className="rounded-2xl border border-neutral-200 p-4">
                   <div className="text-xs text-neutral-500">Avg hours / wk</div>
                   <div className="mt-1 text-2xl font-semibold">
-                    {summary.avgHours == null
-                      ? "—"
-                      : Math.round(summary.avgHours)}
+                    {summary.avgHours == null ? "—" : Math.round(summary.avgHours)}
                   </div>
                   <div className="mt-1 text-xs text-neutral-500">
                     based on {summary.hoursSample}{" "}
@@ -652,9 +645,7 @@ export default function VenuePage() {
                 <div className="rounded-2xl border border-neutral-200 p-4">
                   <div className="text-xs text-neutral-500">Tip pool</div>
                   <div className="mt-1 text-2xl font-semibold">
-                    {summary.pctTipPool == null
-                      ? "—"
-                      : fmtPct(summary.pctTipPool)}
+                    {summary.pctTipPool == null ? "—" : fmtPct(summary.pctTipPool)}
                   </div>
                   <div className="mt-1 text-xs text-neutral-500">
                     based on {summary.tipPoolSample}{" "}
@@ -664,82 +655,50 @@ export default function VenuePage() {
               </div>
 
               {editing && (
-                <div className="mt-6 grid gap-3">
-                  <div className="grid gap-3 md:grid-cols-3">
-                    <label className="grid gap-2 md:col-span-2">
-                      <span className="text-sm font-medium">Name</span>
-                      <input
-                        className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
-                        value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
-                      />
-                    </label>
-
-                    <label className="grid gap-2">
-                      <span className="text-sm font-medium">Venue type</span>
-                      <input
-                        className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
-                        placeholder="bar / restaurant…"
-                        value={editType}
-                        onChange={(e) => setEditType(e.target.value)}
-                      />
-                    </label>
+                <div className="mt-6 grid gap-3 rounded-2xl border border-neutral-200 p-4">
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium">Venue name</label>
+                    <input
+                      className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                    />
                   </div>
 
                   <div className="grid gap-2">
-                    <span className="text-sm font-medium">City</span>
+                    <label className="text-sm font-medium">City</label>
                     <input
-                      list="all-city-options"
                       className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
-                      placeholder="Type to see suggestions (or enter a new city)"
                       value={editCity}
                       onChange={(e) => setEditCity(e.target.value)}
                     />
-                    <datalist id="all-city-options">
-                      {allCities.map((c) => (
-                        <option key={c} value={c} />
-                      ))}
-                    </datalist>
-
                     {editCitySuggestion ? (
-                      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                        Did you mean{" "}
-                        <span className="font-semibold">
-                          “{editCitySuggestion}”
-                        </span>
-                        ?
-                        <button
-                          type="button"
-                          onClick={() => setEditCity(editCitySuggestion)}
-                          className="ml-3 rounded-lg border border-amber-300 bg-white px-3 py-1 text-xs hover:bg-amber-100"
-                        >
-                          Use suggestion
-                        </button>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-neutral-500">
-                        Suggestions help avoid typos. New cities are allowed.
+                      <p className="text-xs text-neutral-600">
+                        Suggestion: <span className="font-medium">{editCitySuggestion}</span>
                       </p>
-                    )}
+                    ) : null}
                   </div>
 
-                  <div className="flex flex-wrap gap-2">
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium">Venue type</label>
+                    <input
+                      className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
+                      value={editType}
+                      onChange={(e) => setEditType(e.target.value)}
+                      placeholder="Bar, Restaurant, Club…"
+                    />
+                  </div>
+
+                  <div className="flex gap-2">
                     <button
                       onClick={saveVenueEdits}
-                      className="rounded-xl bg-black px-4 py-3 text-sm font-medium text-white hover:bg-neutral-800"
+                      className="rounded-xl bg-black px-4 py-2 text-sm font-medium text-white hover:opacity-90"
                     >
-                      Save changes
+                      Save
                     </button>
                     <button
-                      onClick={() => {
-                        setEditName(venue.name ?? "");
-                        setEditCity(titleCase(venue.city ?? ""));
-                        setEditType(
-                          venue.venue_type ? titleCase(venue.venue_type) : ""
-                        );
-                        setEditing(false);
-                      }}
-                      className="rounded-xl border border-neutral-200 px-4 py-3 text-sm hover:bg-neutral-50"
+                      onClick={() => setEditing(false)}
+                      className="rounded-xl border border-neutral-200 px-4 py-2 text-sm hover:bg-neutral-50"
                     >
                       Cancel
                     </button>
@@ -760,9 +719,7 @@ export default function VenuePage() {
                     <select
                       className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
                       value={reviewSort}
-                      onChange={(e) =>
-                        setReviewSort(e.target.value as ReviewSort)
-                      }
+                      onChange={(e) => setReviewSort(e.target.value as ReviewSort)}
                     >
                       <option value="newest">Newest</option>
                       <option value="oldest">Oldest</option>
@@ -775,9 +732,7 @@ export default function VenuePage() {
                     <input
                       type="checkbox"
                       checked={filterRecommendedOnly}
-                      onChange={(e) =>
-                        setFilterRecommendedOnly(e.target.checked)
-                      }
+                      onChange={(e) => setFilterRecommendedOnly(e.target.checked)}
                     />
                     <span className="text-sm">Recommended only</span>
                   </label>
@@ -798,14 +753,11 @@ export default function VenuePage() {
                       <input
                         type="checkbox"
                         checked={hideMissingForNumericSort}
-                        onChange={(e) =>
-                          setHideMissingForNumericSort(e.target.checked)
-                        }
+                        onChange={(e) => setHideMissingForNumericSort(e.target.checked)}
                       />
                       <span className="text-sm text-neutral-700">
-                        Hide reviews missing{" "}
-                        {reviewSort === "tips_desc" ? "tips" : "hours"} for this
-                        sort
+                        Hide reviews missing {reviewSort === "tips_desc" ? "tips" : "hours"} for
+                        this sort
                       </span>
                     </label>
                   </div>
@@ -813,198 +765,209 @@ export default function VenuePage() {
 
                 <div className="mt-3 text-xs text-neutral-500">
                   Showing{" "}
-                  <span className="font-medium">
-                    {filteredSortedReviews.length}
-                  </span>{" "}
-                  of <span className="font-medium">{reviews.length}</span>{" "}
-                  reviews
+                  <span className="font-medium">{filteredSortedReviews.length}</span> of{" "}
+                  <span className="font-medium">{reviews.length}</span> reviews
                 </div>
               </div>
 
-              {/* Add review form */}
-              <form onSubmit={addReview} className="mt-6 grid gap-3">
-                <div className="grid gap-3 md:grid-cols-2">
+              {/* Add review */}
+              <div className="mt-6 rounded-2xl border border-neutral-200 p-4">
+                <h3 className="text-lg font-semibold">Add a review</h3>
+
+                <form onSubmit={addReview} className="mt-4 grid gap-3">
+                  <div className="grid gap-2 md:grid-cols-2">
+                    <label className="grid gap-2">
+                      <span className="text-sm font-medium">Role</span>
+                      <input
+                        className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
+                        value={role}
+                        onChange={(e) => setRole(e.target.value)}
+                        placeholder="server, bartender, host…"
+                      />
+                    </label>
+
+                    <label className="grid gap-2">
+                      <span className="text-sm font-medium">Earnings</span>
+                      <select
+                        className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
+                        value={earningsLabel}
+                        onChange={(e) =>
+                          setEarningsLabel(e.target.value as "pre-tax" | "post-tax")
+                        }
+                      >
+                        <option value="pre-tax">pre-tax</option>
+                        <option value="post-tax">post-tax</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <div className="grid gap-2 md:grid-cols-2">
+                    <label className="grid gap-2">
+                      <span className="text-sm font-medium">Tips / week (optional)</span>
+                      <input
+                        inputMode="numeric"
+                        className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
+                        value={tipsWeekly}
+                        onChange={(e) => setTipsWeekly(e.target.value)}
+                        placeholder="e.g. 1200"
+                      />
+                    </label>
+
+                    <label className="grid gap-2">
+                      <span className="text-sm font-medium">Hours / week (optional)</span>
+                      <input
+                        inputMode="numeric"
+                        className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
+                        value={hoursWeekly}
+                        onChange={(e) => setHoursWeekly(e.target.value)}
+                        placeholder="e.g. 32"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="grid gap-2 md:grid-cols-2">
+                    <label className="flex items-center gap-2 rounded-xl border border-neutral-200 px-4 py-3">
+                      <input
+                        type="checkbox"
+                        checked={recommended}
+                        onChange={(e) => setRecommended(e.target.checked)}
+                      />
+                      <span className="text-sm">Recommended</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 rounded-xl border border-neutral-200 px-4 py-3">
+                      <input
+                        type="checkbox"
+                        checked={tipPool}
+                        onChange={(e) => setTipPool(e.target.checked)}
+                      />
+                      <span className="text-sm">Tip pool</span>
+                    </label>
+                  </div>
+
                   <label className="grid gap-2">
-                    <span className="text-sm font-medium">Role (required)</span>
+                    <span className="text-sm font-medium">Busy season (optional)</span>
                     <input
                       className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
-                      value={role}
-                      onChange={(e) => setRole(e.target.value)}
+                      value={busySeason}
+                      onChange={(e) => setBusySeason(e.target.value)}
+                      placeholder="Summer, holidays, year-round…"
                     />
                   </label>
 
                   <label className="grid gap-2">
-                    <span className="text-sm font-medium">Earnings label</span>
-                    <select
-                      className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
-                      value={earningsLabel}
-                      onChange={(e) =>
-                        setEarningsLabel(
-                          e.target.value as "pre-tax" | "post-tax"
-                        )
-                      }
+                    <span className="text-sm font-medium">Comment (optional)</span>
+                    <textarea
+                      className="min-h-[110px] w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
+                      value={comment}
+                      onChange={(e) => setComment(e.target.value)}
+                      placeholder="Anonymous notes about management, volume, schedule…"
+                    />
+                  </label>
+
+                  <div className="flex gap-2">
+                    <button
+                      type="submit"
+                      className="rounded-xl bg-black px-4 py-2 text-sm font-medium text-white hover:opacity-90"
                     >
-                      <option value="pre-tax">pre-tax</option>
-                      <option value="post-tax">post-tax</option>
-                    </select>
-                  </label>
-                </div>
+                      Submit review
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRecommended(false);
+                        setComment("");
+                        setTipsWeekly("");
+                        setHoursWeekly("");
+                        setTipPool(false);
+                        setBusySeason("");
+                        setEarningsLabel("pre-tax");
+                        setRole("server");
+                      }}
+                      className="rounded-xl border border-neutral-200 px-4 py-2 text-sm hover:bg-neutral-50"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </form>
+              </div>
 
-                <div className="grid gap-3 md:grid-cols-2">
-                  <label className="grid gap-2">
-                    <span className="text-sm font-medium">Tips weekly ($)</span>
-                    <input
-                      className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
-                      placeholder="e.g. 900"
-                      value={tipsWeekly}
-                      onChange={(e) => setTipsWeekly(e.target.value)}
-                      inputMode="numeric"
-                    />
-                  </label>
-
-                  <label className="grid gap-2">
-                    <span className="text-sm font-medium">Hours weekly</span>
-                    <input
-                      className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
-                      placeholder="e.g. 30"
-                      value={hoursWeekly}
-                      onChange={(e) => setHoursWeekly(e.target.value)}
-                      inputMode="numeric"
-                    />
-                  </label>
-                </div>
-
-                <label className="grid gap-2">
-                  <span className="text-sm font-medium">Busy season</span>
-                  <input
-                    className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
-                    placeholder="Summer / Winter / Holidays…"
-                    value={busySeason}
-                    onChange={(e) => setBusySeason(e.target.value)}
-                  />
-                </label>
-
-                <label className="grid gap-2">
-                  <span className="text-sm font-medium">Comment</span>
-                  <textarea
-                    className="min-h-[90px] w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
-                    placeholder="What should someone know before working here?"
-                    value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                  />
-                </label>
-
-                <div className="flex flex-wrap items-center gap-6">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={tipPool}
-                      onChange={(e) => setTipPool(e.target.checked)}
-                    />
-                    <span className="text-sm">Tip pool</span>
-                  </label>
-
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={recommended}
-                      onChange={(e) => setRecommended(e.target.checked)}
-                    />
-                    <span className="text-sm">Recommended</span>
-                  </label>
-                </div>
-
-                <button className="mt-2 w-full rounded-xl bg-black px-4 py-3 font-medium text-white hover:bg-neutral-800">
-                  Submit review (no login)
-                </button>
-              </form>
-
-              {/* Reviews list */}
-              <div className="mt-8">
-                <div className="flex items-end justify-between gap-4">
-                  <h3 className="text-lg font-semibold">Recent reviews</h3>
-                  <button
-                    onClick={loadReviews}
-                    className="rounded-xl border border-neutral-200 px-3 py-2 text-sm hover:bg-neutral-50"
-                  >
-                    Refresh reviews
-                  </button>
-                </div>
-
-                {reviewsLoading && (
-                  <p className="mt-3 text-neutral-600">Loading reviews…</p>
-                )}
-                {reviewsError && (
-                  <p className="mt-3 text-red-600">Error: {reviewsError}</p>
-                )}
-
-                {!reviewsLoading && filteredSortedReviews.length === 0 ? (
-                  <p className="mt-3 text-neutral-600">
-                    No reviews match these filters yet.
-                  </p>
+              {/* Review list */}
+              <div className="mt-6">
+                {reviewsLoading ? (
+                  <p className="text-sm text-neutral-600">Loading reviews…</p>
+                ) : reviewsError ? (
+                  <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                    {reviewsError}
+                  </div>
+                ) : filteredSortedReviews.length === 0 ? (
+                  <div className="rounded-2xl border border-neutral-200 p-4 text-sm text-neutral-700">
+                    No reviews yet. Be the first to add one.
+                  </div>
                 ) : (
-                  <div className="mt-4 grid gap-3">
+                  <div className="grid gap-3">
                     {filteredSortedReviews.map((r) => {
                       const alreadyReported = reportedReviewIds.has(r.id);
+
                       return (
                         <div
                           key={r.id}
-                          className="rounded-2xl border border-neutral-200 p-5"
+                          className="rounded-2xl border border-neutral-200 p-4"
                         >
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="font-semibold">
-                              {r.role}{" "}
-                              <span className="text-sm font-normal text-neutral-600">
-                                • {r.earnings_label}
-                                {r.recommended ? " • Recommended" : ""}
-                                {r.tip_pool === true ? " • Tip pool" : ""}
-                              </span>
-                            </div>
-
-                            <div className="flex items-center gap-3">
-                              <button
-                                type="button"
-                                onClick={() => openReport(r.id)}
-                                disabled={alreadyReported}
-                                title={
-                                  alreadyReported
-                                    ? "Reported (thank you)"
-                                    : "Report this review"
-                                }
-                                className={`rounded-lg border px-2 py-1 text-xs hover:bg-neutral-50 ${
-                                  alreadyReported
-                                    ? "cursor-not-allowed border-neutral-200 text-neutral-400"
-                                    : "border-neutral-200 text-neutral-700"
-                                }`}
-                              >
-                                <span className="inline-flex items-center gap-1">
-                                  <FlagIcon className="h-4 w-4" />
-                                  {alreadyReported ? "Reported" : "Report"}
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <div className="text-sm font-semibold">
+                                {titleCase(r.role)}
+                                <span className="ml-2 text-xs font-normal text-neutral-500">
+                                  {new Date(r.created_at).toLocaleDateString()}
                                 </span>
-                              </button>
+                              </div>
 
-                              <div className="text-xs text-neutral-500">
-                                {new Date(r.created_at).toLocaleDateString()}
+                              <div className="mt-2 flex flex-wrap gap-2 text-xs text-neutral-700">
+                                <span className="rounded-full border border-neutral-200 px-2 py-1">
+                                  Tips:{" "}
+                                  {typeof r.tips_weekly === "number"
+                                    ? fmtMoney(r.tips_weekly)
+                                    : "—"}{" "}
+                                  ({r.earnings_label})
+                                </span>
+                                <span className="rounded-full border border-neutral-200 px-2 py-1">
+                                  Hours:{" "}
+                                  {typeof r.hours_weekly === "number"
+                                    ? Math.round(r.hours_weekly)
+                                    : "—"}
+                                </span>
+                                <span className="rounded-full border border-neutral-200 px-2 py-1">
+                                  Recommended: {r.recommended ? "Yes" : "No"}
+                                </span>
+                               <span className="rounded-full border border-neutral-200 px-2 py-1">
+  Tip pool: {r.tip_pool === null ? "—" : r.tip_pool ? "Yes" : "No"}
+</span>
+
+                                {r.busy_season ? (
+                                  <span className="rounded-full border border-neutral-200 px-2 py-1">
+                                    Busy: {r.busy_season}
+                                  </span>
+                                ) : null}
                               </div>
                             </div>
-                          </div>
 
-                          <div className="mt-2 text-sm text-neutral-700">
-                            {r.tips_weekly != null
-                              ? `Tips/wk: $${r.tips_weekly}`
-                              : "Tips/wk: —"}
-                            {" • "}
-                            {r.hours_weekly != null
-                              ? `Hours/wk: ${r.hours_weekly}`
-                              : "Hours/wk: —"}
-                            {" • "}
-                            {r.busy_season
-                              ? `Busy: ${r.busy_season}`
-                              : "Busy: —"}
+                            <button
+                              type="button"
+                              className="flex items-center gap-2 rounded-xl border border-neutral-200 px-3 py-2 text-xs hover:bg-neutral-50 disabled:opacity-60"
+                              onClick={() => openReport(r.id)}
+                              disabled={alreadyReported}
+                              title={alreadyReported ? "Already reported" : "Report this review"}
+                            >
+                              <FlagIcon className="h-4 w-4" />
+                              {alreadyReported ? "Reported" : "Report"}
+                            </button>
                           </div>
 
                           {r.comment ? (
-                            <p className="mt-3 text-neutral-800">{r.comment}</p>
+                            <p className="mt-3 whitespace-pre-wrap text-sm text-neutral-800">
+                              {r.comment}
+                            </p>
                           ) : null}
                         </div>
                       );
@@ -1013,74 +976,60 @@ export default function VenuePage() {
                 )}
               </div>
             </section>
+
+            {/* Report modal */}
+            {reportingReviewId ? (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+                <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-lg font-semibold">Report review</h3>
+                      <p className="mt-1 text-sm text-neutral-600">
+                        Optional: tell us why. This stays anonymous.
+                      </p>
+                    </div>
+                    <button
+                      onClick={closeReport}
+                      className="rounded-xl border border-neutral-200 px-3 py-2 text-sm hover:bg-neutral-50"
+                    >
+                      Close
+                    </button>
+                  </div>
+
+                  <textarea
+                    className="mt-4 min-h-[120px] w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
+                    value={reportReason}
+                    onChange={(e) => setReportReason(e.target.value)}
+                    placeholder="Reason (optional)…"
+                    disabled={reportSubmitting}
+                  />
+
+                  {reportError ? (
+                    <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                      {reportError}
+                    </div>
+                  ) : null}
+
+                  <div className="mt-4 flex gap-2">
+                    <button
+                      onClick={submitReport}
+                      disabled={reportSubmitting}
+                      className="rounded-xl bg-black px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
+                    >
+                      {reportSubmitting ? "Submitting…" : "Submit report"}
+                    </button>
+                    <button
+                      onClick={closeReport}
+                      disabled={reportSubmitting}
+                      className="rounded-xl border border-neutral-200 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-60"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </>
-        )}
-
-        {/* Report modal */}
-        {reportingReviewId && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-            onMouseDown={(e) => {
-              if (e.target === e.currentTarget) closeReport();
-            }}
-          >
-            <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h3 className="text-xl font-semibold">Report review</h3>
-                  <p className="mt-1 text-sm text-neutral-600">
-                    Thanks — reports help keep data clean. Add a quick reason
-                    (optional).
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={closeReport}
-                  disabled={reportSubmitting}
-                  className="rounded-xl border border-neutral-200 px-3 py-2 text-sm hover:bg-neutral-50 disabled:cursor-not-allowed"
-                >
-                  Close
-                </button>
-              </div>
-
-              <label className="mt-4 grid gap-2">
-                <span className="text-sm font-medium">Reason (optional)</span>
-                <textarea
-                  className="min-h-[90px] w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
-                  placeholder="e.g. spam, inaccurate tips, wrong venue, abusive language…"
-                  value={reportReason}
-                  onChange={(e) => setReportReason(e.target.value)}
-                  disabled={reportSubmitting}
-                />
-              </label>
-
-              {reportError ? (
-                <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                  {reportError}
-                </div>
-              ) : null}
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={submitReport}
-                  disabled={reportSubmitting}
-                  className="rounded-xl bg-black px-4 py-3 text-sm font-medium text-white hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-400"
-                >
-                  {reportSubmitting ? "Submitting…" : "Submit report"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={closeReport}
-                  disabled={reportSubmitting}
-                  className="rounded-xl border border-neutral-200 px-4 py-3 text-sm hover:bg-neutral-50 disabled:cursor-not-allowed"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
         )}
       </div>
     </main>
