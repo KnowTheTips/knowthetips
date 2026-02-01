@@ -14,7 +14,7 @@ export default function Footer() {
             className="underline hover:text-neutral-800"
             href="mailto:info@knowthetips.com"
           >
-            contact@knowthetips.com
+            info@knowthetips.com
           </a>
         </p>
 
