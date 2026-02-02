@@ -399,7 +399,7 @@ export default function VenuePage() {
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       }
       if (reviewSort === "oldest") {
-        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        return new Date(a.created_at).getTime() - new Date(a.created_at).getTime();
       }
       if (reviewSort === "tips_desc") {
         const av = typeof a.tips_weekly === "number" ? a.tips_weekly : -Infinity;
@@ -657,6 +657,127 @@ export default function VenuePage() {
               )}
             </section>
 
+            {/* Add a review (separate bubble, ABOVE Reviews) */}
+            <section className="mt-10 rounded-2xl border border-neutral-200 p-6">
+              <h2 className="text-2xl font-semibold">Add a review</h2>
+
+              <form onSubmit={addReview} className="mt-4 grid gap-3">
+                <div className="grid gap-2 md:grid-cols-2">
+                  <label className="grid gap-2">
+                    <span className="text-sm font-medium">Role</span>
+                    <input
+                      className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
+                      value={role}
+                      onChange={(e) => setRole(e.target.value)}
+                      placeholder="server, bartender…"
+                    />
+                  </label>
+
+                  <label className="grid gap-2">
+                    <span className="text-sm font-medium">Earnings</span>
+                    <select
+                      className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
+                      value={earningsLabel}
+                      onChange={(e) => setEarningsLabel(e.target.value as "pre-tax" | "post-tax")}
+                    >
+                      <option value="pre-tax">pre-tax</option>
+                      <option value="post-tax">post-tax</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="grid gap-2 md:grid-cols-2">
+                  <label className="grid gap-2">
+                    <span className="text-sm font-medium">Tips / week (optional)</span>
+                    <input
+                      inputMode="numeric"
+                      className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
+                      value={tipsWeekly}
+                      onChange={(e) => setTipsWeekly(e.target.value)}
+                      placeholder="e.g. 1200"
+                    />
+                  </label>
+
+                  <label className="grid gap-2">
+                    <span className="text-sm font-medium">Hours / week (optional)</span>
+                    <input
+                      inputMode="numeric"
+                      className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
+                      value={hoursWeekly}
+                      onChange={(e) => setHoursWeekly(e.target.value)}
+                      placeholder="e.g. 32"
+                    />
+                  </label>
+                </div>
+
+                <div className="grid gap-2 md:grid-cols-2">
+                  <label className="flex items-center gap-2 rounded-xl border border-neutral-200 px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={recommended}
+                      onChange={(e) => setRecommended(e.target.checked)}
+                    />
+                    <span className="text-sm">Recommended</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 rounded-xl border border-neutral-200 px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={tipPool}
+                      onChange={(e) => setTipPool(e.target.checked)}
+                    />
+                    <span className="text-sm">Tip pool</span>
+                  </label>
+                </div>
+
+                <label className="grid gap-2">
+                  <span className="text-sm font-medium">Busy season (optional)</span>
+                  <input
+                    className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
+                    value={busySeason}
+                    onChange={(e) => setBusySeason(e.target.value)}
+                    placeholder="Summer, holidays, year-round…"
+                  />
+                </label>
+
+                <label className="grid gap-2">
+                  <span className="text-sm font-medium">Comment (optional)</span>
+                  <textarea
+                    className="min-h-[110px] w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
+                    value={comment}
+                    onChange={(e) => setComment(e.target.value)}
+                    placeholder="Anonymous notes about management, volume, schedule…"
+                  />
+                </label>
+
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    className="rounded-xl bg-black px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+                  >
+                    Submit review
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRecommended(false);
+                      setComment("");
+                      setTipsWeekly("");
+                      setHoursWeekly("");
+                      setTipPool(false);
+                      setBusySeason("");
+                      setEarningsLabel("pre-tax");
+                      setRole("server");
+                    }}
+                    className="rounded-xl border border-neutral-200 px-4 py-2 text-sm hover:bg-neutral-50"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </form>
+            </section>
+
+            {/* Reviews (separate bubble, directly above sort controls + review list) */}
             <section className="mt-10 rounded-2xl border border-neutral-200 p-6">
               <h2 className="text-2xl font-semibold">Reviews</h2>
 
@@ -725,125 +846,6 @@ export default function VenuePage() {
                   </p>
                 </div>
               )}
-
-              <div className="mt-6 rounded-2xl border border-neutral-200 p-4">
-                <h3 className="text-lg font-semibold">Add a review</h3>
-
-                <form onSubmit={addReview} className="mt-4 grid gap-3">
-                  <div className="grid gap-2 md:grid-cols-2">
-                    <label className="grid gap-2">
-                      <span className="text-sm font-medium">Role</span>
-                      <input
-                        className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
-                        value={role}
-                        onChange={(e) => setRole(e.target.value)}
-                        placeholder="server, bartender…"
-                      />
-                    </label>
-
-                    <label className="grid gap-2">
-                      <span className="text-sm font-medium">Earnings</span>
-                      <select
-                        className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
-                        value={earningsLabel}
-                        onChange={(e) => setEarningsLabel(e.target.value as "pre-tax" | "post-tax")}
-                      >
-                        <option value="pre-tax">pre-tax</option>
-                        <option value="post-tax">post-tax</option>
-                      </select>
-                    </label>
-                  </div>
-
-                  <div className="grid gap-2 md:grid-cols-2">
-                    <label className="grid gap-2">
-                      <span className="text-sm font-medium">Tips / week (optional)</span>
-                      <input
-                        inputMode="numeric"
-                        className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
-                        value={tipsWeekly}
-                        onChange={(e) => setTipsWeekly(e.target.value)}
-                        placeholder="e.g. 1200"
-                      />
-                    </label>
-
-                    <label className="grid gap-2">
-                      <span className="text-sm font-medium">Hours / week (optional)</span>
-                      <input
-                        inputMode="numeric"
-                        className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
-                        value={hoursWeekly}
-                        onChange={(e) => setHoursWeekly(e.target.value)}
-                        placeholder="e.g. 32"
-                      />
-                    </label>
-                  </div>
-
-                  <div className="grid gap-2 md:grid-cols-2">
-                    <label className="flex items-center gap-2 rounded-xl border border-neutral-200 px-4 py-3">
-                      <input
-                        type="checkbox"
-                        checked={recommended}
-                        onChange={(e) => setRecommended(e.target.checked)}
-                      />
-                      <span className="text-sm">Recommended</span>
-                    </label>
-
-                    <label className="flex items-center gap-2 rounded-xl border border-neutral-200 px-4 py-3">
-                      <input
-                        type="checkbox"
-                        checked={tipPool}
-                        onChange={(e) => setTipPool(e.target.checked)}
-                      />
-                      <span className="text-sm">Tip pool</span>
-                    </label>
-                  </div>
-
-                  <label className="grid gap-2">
-                    <span className="text-sm font-medium">Busy season (optional)</span>
-                    <input
-                      className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
-                      value={busySeason}
-                      onChange={(e) => setBusySeason(e.target.value)}
-                      placeholder="Summer, holidays, year-round…"
-                    />
-                  </label>
-
-                  <label className="grid gap-2">
-                    <span className="text-sm font-medium">Comment (optional)</span>
-                    <textarea
-                      className="min-h-[110px] w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
-                      value={comment}
-                      onChange={(e) => setComment(e.target.value)}
-                      placeholder="Anonymous notes about management, volume, schedule…"
-                    />
-                  </label>
-
-                  <div className="flex gap-2">
-                    <button
-                      type="submit"
-                      className="rounded-xl bg-black px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-                    >
-                      Submit review
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setRecommended(false);
-                        setComment("");
-                        setTipsWeekly("");
-                        setHoursWeekly("");
-                        setTipPool(false);
-                        setBusySeason("");
-                        setEarningsLabel("pre-tax");
-                        setRole("server");
-                      }}
-                      className="rounded-xl border border-neutral-200 px-4 py-2 text-sm hover:bg-neutral-50"
-                    >
-                      Clear
-                    </button>
-                  </div>
-                </form>
-              </div>
 
               <div className="mt-6">
                 {reviewsLoading ? (
