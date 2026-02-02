@@ -136,14 +136,8 @@ export default function Home() {
             </p>
           </div>
 
-          {/* IMPORTANT: This is the How it Works link.
-              It should NOT interfere with venue card links below. */}
-          <Link
-            href="/how-it-works"
-            className="rounded-xl border border-neutral-200 px-3 py-2 text-sm hover:bg-neutral-50"
-          >
-            How it works
-          </Link>
+          {/* Removed the homepage "How it works" Link.
+              The site-wide header link in app/layout.tsx is the only one needed. */}
         </div>
 
         {/* Add a venue */}
@@ -187,12 +181,15 @@ export default function Home() {
             </button>
           </div>
 
-          {venuesLoading && <p className="mt-4 text-neutral-600">Loading venues…</p>}
-          {venuesError && <p className="mt-4 text-red-600">Error: {venuesError}</p>}
+          {venuesLoading && (
+            <p className="mt-4 text-neutral-600">Loading venues…</p>
+          )}
+          {venuesError && (
+            <p className="mt-4 text-red-600">Error: {venuesError}</p>
+          )}
 
           <div className="mt-4 grid gap-3">
             {venues.map((v) => {
-              // ✅ HARD GUARANTEE: venue cards link to /venues/<id>
               const href = v?.id ? `/venues/${v.id}` : undefined;
 
               const CardInner = (
@@ -215,7 +212,6 @@ export default function Home() {
                 </div>
               );
 
-              // If id is missing (shouldn’t happen), render non-clickable card
               if (!href) {
                 return (
                   <div
