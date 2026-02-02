@@ -37,7 +37,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased text-neutral-900`}
+        className={`${geistSans.variable} ${geistMono.variable} subpixel-antialiased text-neutral-900`}
       >
         {googleSrc ? (
           <Script
