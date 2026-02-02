@@ -36,8 +36,18 @@ export default function RootLayout({
 
   return (
     <html lang="en">
+      <head>
+        {/* Helps Safari / iOS render form controls + text with intended light colors */}
+        <meta name="color-scheme" content="light" />
+      </head>
+
       <body
         className={`${geistSans.variable} ${geistMono.variable} subpixel-antialiased text-neutral-900`}
+        style={{
+          // Defensive: nudges "reader/darkening" tools to keep contrast sane
+          backgroundColor: "#ffffff",
+          color: "#171717",
+        }}
       >
         {googleSrc ? (
           <Script
@@ -55,10 +65,7 @@ export default function RootLayout({
             </Link>
 
             <nav className="flex items-center gap-6">
-              <Link
-                href="/"
-                className="text-sm text-neutral-700 hover:underline"
-              >
+              <Link href="/" className="text-sm text-neutral-700 hover:underline">
                 Home
               </Link>
               <Link
