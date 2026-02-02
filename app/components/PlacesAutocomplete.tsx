@@ -56,11 +56,20 @@ export default function PlacesAutocomplete(props: {
   defaultValue?: string;
   country?: string; // e.g. "us"
 }) {
-  const { placeholder = "Search a venue…", onPick, defaultValue = "", country = "us" } =
-    props;
+  const {
+    placeholder = "Search a venue…",
+    onPick,
+    defaultValue = "",
+    country = "us",
+  } = props;
 
   const [value, setValue] = useState(defaultValue);
   const inputRef = useRef<HTMLInputElement | null>(null);
+
+  // Keep input synced if parent ever changes defaultValue (safe, tiny improvement)
+  useEffect(() => {
+    setValue(defaultValue);
+  }, [defaultValue]);
 
   // IMPORTANT: avoid re-initializing Autocomplete when parent re-renders.
   const onPickRef = useRef(onPick);
@@ -88,7 +97,13 @@ export default function PlacesAutocomplete(props: {
       if (!window.google?.maps?.places) return;
 
       ac = new window.google.maps.places.Autocomplete(inputRef.current, {
-        fields: ["place_id", "name", "formatted_address", "geometry", "address_components"],
+        fields: [
+          "place_id",
+          "name",
+          "formatted_address",
+          "geometry",
+          "address_components",
+        ],
         componentRestrictions: { country },
         types: ["establishment"],
       });
@@ -125,7 +140,9 @@ export default function PlacesAutocomplete(props: {
     <input
       ref={inputRef}
       className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
-      placeholder={apiKeyExists ? placeholder : "Google key missing — enter manually below"}
+      placeholder={
+        apiKeyExists ? placeholder : "Google key missing — enter manually below"
+      }
       value={value}
       onChange={(e) => setValue(e.target.value)}
     />
