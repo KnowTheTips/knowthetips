@@ -3,11 +3,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
-
-// IMPORTANT:
-// Change this import to match your actual file name:
-// - If your file is app/components/PlacesAutocomplete.tsx, keep this as-is.
-// - If your file is app/components/Autocomplete.tsx, change it to:  import PlacesAutocomplete from "@/app/components/Autocomplete";
 import PlacesAutocomplete from "@/app/components/PlacesAutocomplete";
 
 type Venue = {
@@ -21,7 +16,6 @@ type Venue = {
 
 type VenueWithCount = Venue & { review_count: number };
 
-// Matches what your Places component returns
 type PlacePick = {
   placeId: string;
   name: string;
@@ -43,7 +37,7 @@ export default function Home() {
   const [venueCity, setVenueCity] = useState("");
   const [venueType, setVenueType] = useState("");
 
-  // Optional Places pick
+  // Google Places pick (optional)
   const [placePick, setPlacePick] = useState<PlacePick | null>(null);
 
   // ---------- Load Venues (and counts) ----------
@@ -133,7 +127,7 @@ export default function Home() {
       venue_type: type || null,
     };
 
-    // If chosen via Places, store optional fields (only if your DB has columns for them)
+    // If user selected a Google place, store optional fields
     if (placePick?.placeId) {
       insertPayload.place_id = placePick.placeId;
       insertPayload.formatted_address = placePick.formattedAddress || null;
@@ -177,7 +171,9 @@ export default function Home() {
 
           {/* Google Places search (restored) */}
           <div className="mt-4 grid gap-2">
-            <div className="text-sm font-medium">Search with Google (autocomplete)</div>
+            <div className="text-sm font-medium">
+              Search with Google (autocomplete)
+            </div>
 
             <PlacesAutocomplete
               placeholder="Start typing a venue name…"
@@ -192,7 +188,9 @@ export default function Home() {
             {placePick ? (
               <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-800">
                 <div className="font-medium">Selected:</div>
-                <div className="mt-1">{placePick.formattedAddress || "Address unavailable"}</div>
+                <div className="mt-1">
+                  {placePick.formattedAddress || "Address unavailable"}
+                </div>
                 <div className="mt-1 text-xs text-neutral-600">
                   place_id saved for de-duplication
                 </div>
@@ -200,22 +198,24 @@ export default function Home() {
             ) : (
               <div className="text-xs text-neutral-500">
                 {googleEnabled
-                  ? "Pick a result to auto-fill name/city."
+                  ? "Pick a result to auto-fill the form below."
                   : "Google key not detected — use manual entry below."}
               </div>
             )}
           </div>
 
-          {/* Manual entry (still available) */}
+          {/* Manual fields */}
           <form onSubmit={addVenue} className="mt-4 grid gap-3">
             <input
               className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
               placeholder="Venue name (required)"
               value={venueName}
               onChange={(e) => {
-                setVenueName(e.target.value);
-                // If user edits away from the selected place, stop using placePick
-                if (placePick && e.target.value.trim() !== placePick.name.trim()) {
+                const next = e.target.value;
+                setVenueName(next);
+
+                // If user changes name after picking a Place, stop using the pick
+                if (placePick && next.trim() !== (placePick.name || "").trim()) {
                   setPlacePick(null);
                 }
               }}
@@ -225,8 +225,10 @@ export default function Home() {
               placeholder="City (required)"
               value={venueCity}
               onChange={(e) => {
-                setVenueCity(e.target.value);
-                if (placePick && e.target.value.trim() !== placePick.city.trim()) {
+                const next = e.target.value;
+                setVenueCity(next);
+
+                if (placePick && next.trim() !== (placePick.city || "").trim()) {
                   setPlacePick(null);
                 }
               }}
@@ -243,3 +245,75 @@ export default function Home() {
             </button>
           </form>
         </section>
+
+        {/* Venues */}
+        <section className="mt-10">
+          <div className="flex items-end justify-between gap-4">
+            <h2 className="text-2xl font-semibold">Venues</h2>
+            <button
+              onClick={loadVenues}
+              className="rounded-xl border border-neutral-200 px-3 py-2 text-sm hover:bg-neutral-50"
+            >
+              Refresh
+            </button>
+          </div>
+
+          {venuesLoading && (
+            <p className="mt-4 text-neutral-600">Loading venues…</p>
+          )}
+          {venuesError && (
+            <p className="mt-4 text-red-600">Error: {venuesError}</p>
+          )}
+
+          <div className="mt-4 grid gap-3">
+            {venues.map((v) => {
+              const href = v?.id ? `/venues/${v.id}` : undefined;
+
+              const CardInner = (
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-lg font-semibold">{v.name}</div>
+                    <div className="text-sm text-neutral-600">
+                      {v.city}, {v.state}
+                      {v.venue_type ? ` • ${v.venue_type}` : ""}
+                    </div>
+
+                    <div className="mt-1 text-sm text-neutral-500">
+                      {v.review_count} review{v.review_count === 1 ? "" : "s"}
+                    </div>
+                  </div>
+
+                  <div className="text-xs text-neutral-500">
+                    {new Date(v.created_at).toLocaleDateString()}
+                  </div>
+                </div>
+              );
+
+              if (!href) {
+                return (
+                  <div
+                    key={`${v.name}-${v.created_at}`}
+                    className="block rounded-2xl border border-neutral-200 p-5"
+                    title="Missing venue id — cannot open venue page"
+                  >
+                    {CardInner}
+                  </div>
+                );
+              }
+
+              return (
+                <Link
+                  key={v.id}
+                  href={href}
+                  className="block rounded-2xl border border-neutral-200 p-5 transition hover:bg-neutral-50"
+                >
+                  {CardInner}
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      </div>
+    </main>
+  );
+}
