@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -15,32 +15,16 @@ type Venue = {
 
 type VenueWithCount = Venue & { review_count: number };
 
-function normalizeSpaces(s: string) {
-  return s.replace(/\s+/g, " ").trim();
-}
-
-function titleCase(s: string) {
-  const cleaned = normalizeSpaces(s).toLowerCase();
-  return cleaned.replace(/\b([a-z])/g, (m) => m.toUpperCase());
-}
-
 export default function Home() {
   // Venues list (+ review counts)
   const [venues, setVenues] = useState<VenueWithCount[]>([]);
   const [venuesLoading, setVenuesLoading] = useState(true);
   const [venuesError, setVenuesError] = useState<string | null>(null);
 
-  // Add venue form (manual fallback)
+  // Add venue form
   const [venueName, setVenueName] = useState("");
   const [venueCity, setVenueCity] = useState("");
   const [venueType, setVenueType] = useState("");
-  const [venueState, setVenueState] = useState("NJ");
-
-  // Google Places Autocomplete (inline)
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const acRef = useRef<any>(null);
-  const [placesReady, setPlacesReady] = useState(false);
-  const [placesError, setPlacesError] = useState<string | null>(null);
 
   // ---------- Load Venues (and counts) ----------
   async function loadVenues() {
@@ -69,7 +53,7 @@ export default function Home() {
     }
 
     // 2) Get review counts (fetch reviews for these venues, count in JS)
-    const venueIds = baseVenues.map((v) => v.id);
+    const venueIds = baseVenues.map((v) => v.id).filter(Boolean);
 
     const { data: reviewsData, error: reviewsErr } = await supabase
       .from("reviews")
@@ -91,6 +75,7 @@ export default function Home() {
     const counts = new Map<string, number>();
     for (const r of reviewsData || []) {
       const vid = (r as any).venue_id as string;
+      if (!vid) continue;
       counts.set(vid, (counts.get(vid) || 0) + 1);
     }
 
@@ -108,90 +93,13 @@ export default function Home() {
     loadVenues();
   }, []);
 
-  // ---------- Google Places wiring (no external component import) ----------
-  useEffect(() => {
-    let tries = 0;
-    const maxTries = 80; // ~8s
-
-    function init() {
-      try {
-        const w = window as any;
-        if (!w.google || !w.google.maps || !w.google.maps.places) return false;
-        if (!inputRef.current) return false;
-
-        // Prevent double-init
-        if (acRef.current) return true;
-
-        acRef.current = new w.google.maps.places.Autocomplete(inputRef.current, {
-          fields: ["name", "address_components", "types"],
-          types: ["establishment"],
-        });
-
-        acRef.current.addListener("place_changed", () => {
-          const place = acRef.current?.getPlace?.();
-          if (!place) return;
-
-          const name = place.name ? String(place.name) : "";
-
-          const comps: any[] = Array.isArray(place.address_components)
-            ? place.address_components
-            : [];
-
-          const cityComp =
-            comps.find((c) => c?.types?.includes("locality")) ||
-            comps.find((c) => c?.types?.includes("postal_town")) ||
-            comps.find((c) => c?.types?.includes("sublocality")) ||
-            comps.find((c) => c?.types?.includes("administrative_area_level_2"));
-
-          const stateComp = comps.find((c) =>
-            c?.types?.includes("administrative_area_level_1")
-          );
-
-          const nextCity = cityComp?.long_name ? String(cityComp.long_name) : "";
-          const nextState = stateComp?.short_name
-            ? String(stateComp.short_name)
-            : "";
-
-          // Prefill manual fields (still user-confirmable)
-          if (name) setVenueName(name);
-          if (nextCity) setVenueCity(titleCase(nextCity));
-          if (nextState) setVenueState(nextState.toUpperCase());
-        });
-
-        setPlacesReady(true);
-        setPlacesError(null);
-        return true;
-      } catch (e: any) {
-        setPlacesError(e?.message || "Failed to initialize Google Places.");
-        return true; // stop retrying if it throws
-      }
-    }
-
-    const timer = window.setInterval(() => {
-      tries += 1;
-      const ok = init();
-      if (ok || tries >= maxTries) {
-        window.clearInterval(timer);
-        if (!ok && tries >= maxTries) {
-          setPlacesReady(false);
-          setPlacesError(
-            "Google Places did not load. Manual add still works."
-          );
-        }
-      }
-    }, 100);
-
-    return () => window.clearInterval(timer);
-  }, []);
-
-  // ---------- Add Venue (manual submit) ----------
+  // ---------- Add Venue ----------
   async function addVenue(e: React.FormEvent) {
     e.preventDefault();
 
-    const name = normalizeSpaces(venueName);
-    const city = normalizeSpaces(venueCity);
-    const type = normalizeSpaces(venueType);
-    const st = normalizeSpaces(venueState);
+    const name = venueName.trim();
+    const city = venueCity.trim();
+    const type = venueType.trim();
 
     if (!name || !city) {
       alert("Venue name and city are required.");
@@ -200,8 +108,8 @@ export default function Home() {
 
     const { error } = await supabase.from("venues").insert({
       name,
-      city: titleCase(city),
-      state: (st || "NJ").toUpperCase(),
+      city,
+      state: "NJ",
       venue_type: type || null,
     });
 
@@ -210,73 +118,50 @@ export default function Home() {
       return;
     }
 
-    // Clear fields
     setVenueName("");
     setVenueCity("");
     setVenueType("");
-    setVenueState("NJ");
-
-    // Clear the Google input box text (if present)
-    if (inputRef.current) inputRef.current.value = "";
-
     await loadVenues();
   }
 
   return (
     <main className="min-h-screen bg-white">
       <div className="mx-auto max-w-3xl px-6 py-12">
-        <h1 className="text-4xl font-bold tracking-tight">KnowTheTips</h1>
-        <p className="mt-2 text-neutral-600">
-          Venues pulled from Supabase + add new ones (no login).
-        </p>
+        {/* Top header */}
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-4xl font-bold tracking-tight">KnowTheTips</h1>
+            <p className="mt-2 text-neutral-600">
+              Anonymous venue insights for bartenders and servers.
+            </p>
+          </div>
+
+          {/* IMPORTANT: This is the How it Works link.
+              It should NOT interfere with venue card links below. */}
+          <Link
+            href="/how-it-works"
+            className="rounded-xl border border-neutral-200 px-3 py-2 text-sm hover:bg-neutral-50"
+          >
+            How it works
+          </Link>
+        </div>
 
         {/* Add a venue */}
         <section className="mt-10 rounded-2xl border border-neutral-200 p-6">
           <h2 className="text-xl font-semibold">Add a venue</h2>
-
-          {/* Google Places Autocomplete (visible on home screen) */}
-          <div className="mt-4">
-            <label className="block text-sm font-medium text-neutral-700">
-              Search with Google (autocomplete)
-            </label>
-            <input
-              ref={inputRef}
-              className="mt-2 w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
-              placeholder="Start typing a venue name…"
-              autoComplete="off"
-            />
-            <div className="mt-2 text-xs text-neutral-500">
-              {placesError
-                ? placesError
-                : placesReady
-                ? "Select a place to autofill the form below."
-                : "Loading Google Places…"}
-            </div>
-          </div>
-
-          {/* Manual form (still the source of truth) */}
-          <form onSubmit={addVenue} className="mt-6 grid gap-3">
+          <form onSubmit={addVenue} className="mt-4 grid gap-3">
             <input
               className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
               placeholder="Venue name (required)"
               value={venueName}
               onChange={(e) => setVenueName(e.target.value)}
             />
-            <div className="grid gap-3 md:grid-cols-3">
-              <input
-                className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300 md:col-span-2"
-                placeholder="City (required)"
-                value={venueCity}
-                onChange={(e) => setVenueCity(e.target.value)}
-              />
-              <input
-                className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
-                placeholder="State"
-                value={venueState}
-                onChange={(e) => setVenueState(e.target.value)}
-              />
-            </div>
-
+            <input
+              className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
+              placeholder="City (required)"
+              value={venueCity}
+              onChange={(e) => setVenueCity(e.target.value)}
+            />
             <input
               className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
               placeholder="Venue type (optional) — bar, restaurant, etc"
@@ -302,20 +187,15 @@ export default function Home() {
             </button>
           </div>
 
-          {venuesLoading && (
-            <p className="mt-4 text-neutral-600">Loading venues…</p>
-          )}
-          {venuesError && (
-            <p className="mt-4 text-red-600">Error: {venuesError}</p>
-          )}
+          {venuesLoading && <p className="mt-4 text-neutral-600">Loading venues…</p>}
+          {venuesError && <p className="mt-4 text-red-600">Error: {venuesError}</p>}
 
           <div className="mt-4 grid gap-3">
-            {venues.map((v) => (
-              <Link
-                key={v.id}
-                href={`/venues/${v.id}`}
-                className="block rounded-2xl border border-neutral-200 p-5 transition hover:bg-neutral-50"
-              >
+            {venues.map((v) => {
+              // ✅ HARD GUARANTEE: venue cards link to /venues/<id>
+              const href = v?.id ? `/venues/${v.id}` : undefined;
+
+              const CardInner = (
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <div className="text-lg font-semibold">{v.name}</div>
@@ -333,8 +213,31 @@ export default function Home() {
                     {new Date(v.created_at).toLocaleDateString()}
                   </div>
                 </div>
-              </Link>
-            ))}
+              );
+
+              // If id is missing (shouldn’t happen), render non-clickable card
+              if (!href) {
+                return (
+                  <div
+                    key={`${v.name}-${v.created_at}`}
+                    className="block rounded-2xl border border-neutral-200 p-5"
+                    title="Missing venue id — cannot open venue page"
+                  >
+                    {CardInner}
+                  </div>
+                );
+              }
+
+              return (
+                <Link
+                  key={v.id}
+                  href={href}
+                  className="block rounded-2xl border border-neutral-200 p-5 transition hover:bg-neutral-50"
+                >
+                  {CardInner}
+                </Link>
+              );
+            })}
           </div>
         </section>
       </div>
