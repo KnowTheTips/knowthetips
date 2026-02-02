@@ -183,10 +183,9 @@ export default function VenuePage() {
     () => new Set()
   );
 
-  // ✅ NEW: copy-link UI state
+  // Copy-link UI state
   const [copied, setCopied] = useState(false);
 
-  // ✅ NEW: Copy the current venue URL
   async function copyVenueLink() {
     try {
       if (typeof window === "undefined") return;
@@ -195,7 +194,6 @@ export default function VenuePage() {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(url);
       } else {
-        // Fallback (older browsers)
         const ta = document.createElement("textarea");
         ta.value = url;
         ta.style.position = "fixed";
@@ -302,7 +300,6 @@ export default function VenuePage() {
     setVenueLoading(false);
   }
 
-  // ✅ Updated: include rows where is_hidden is NULL or false
   async function loadReviews() {
     if (!venueId) return;
 
@@ -315,7 +312,7 @@ export default function VenuePage() {
         "id,venue_id,role,tips_weekly,hours_weekly,tip_pool,busy_season,recommended,comment,earnings_label,created_at,is_hidden"
       )
       .eq("venue_id", venueId)
-      .not("is_hidden", "is", true) // ✅ include NULL + false
+      .not("is_hidden", "is", true)
       .order("created_at", { ascending: false })
       .limit(50);
 
@@ -374,7 +371,6 @@ export default function VenuePage() {
     [editCity, allCities]
   );
 
-  // ---------- Summary stats ----------
   const summary = useMemo(() => {
     const total = reviews.length;
 
@@ -418,7 +414,6 @@ export default function VenuePage() {
     };
   }, [reviews]);
 
-  // ---------- Filter + Sort reviews ----------
   const filteredSortedReviews = useMemo(() => {
     let list = [...reviews];
 
@@ -560,7 +555,6 @@ export default function VenuePage() {
       return;
     }
 
-    // Reset form
     setRecommended(false);
     setComment("");
     setTipsWeekly("");
@@ -648,7 +642,6 @@ export default function VenuePage() {
                 </button>
               </div>
 
-              {/* Summary stats */}
               <div className="mt-6 grid gap-3 md:grid-cols-5">
                 <div className="rounded-2xl border border-neutral-200 p-4">
                   <div className="text-xs text-neutral-500">Total reviews</div>
@@ -760,11 +753,9 @@ export default function VenuePage() {
               )}
             </section>
 
-            {/* Reviews */}
             <section className="mt-10 rounded-2xl border border-neutral-200 p-6">
               <h2 className="text-2xl font-semibold">Reviews</h2>
 
-              {/* Filters + Sort */}
               <div className="mt-4 rounded-2xl border border-neutral-200 p-4">
                 <div className="grid gap-3 md:grid-cols-3">
                   <label className="grid gap-2">
@@ -833,14 +824,27 @@ export default function VenuePage() {
                 </div>
               </div>
 
-              {/* ✅ EMPTY STATE COPY (for venues with 0 reviews) */}
+              {/* ✅ EMPTY STATE COPY + share link */}
               {!reviewsLoading && !reviewsError && reviews.length === 0 && (
                 <div className="mt-6 rounded-2xl border border-neutral-200 bg-neutral-50 p-5 text-neutral-700">
-                  <p className="font-medium">No reviews yet.</p>
-                  <p className="mt-1 text-sm text-neutral-600">
-                    Be the first to add one — it only takes a minute and helps
-                    other workers.
-                  </p>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium">No reviews yet.</p>
+                      <p className="mt-1 text-sm text-neutral-600">
+                        Be the first to add one — it only takes a minute and
+                        helps other workers.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={copyVenueLink}
+                      className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm hover:bg-neutral-50"
+                      title="Copy this venue link to share"
+                    >
+                      {copied ? "Copied!" : "Share link"}
+                    </button>
+                  </div>
                 </div>
               )}
 
