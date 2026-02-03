@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import PlacesAutocomplete from "@/app/components/PlacesAutocomplete";
@@ -26,16 +26,35 @@ type PlacePick = {
   lng: number;
 };
 
+type SortMode = "NEWEST" | "OLDEST" | "MOST_REVIEWS";
+
+function normalizeSpaces(s: string) {
+  return s.replace(/\s+/g, " ").trim();
+}
+
+function titleCase(s: string) {
+  const cleaned = normalizeSpaces(s).toLowerCase();
+  return cleaned.replace(/\b([a-z])/g, (m) => m.toUpperCase());
+}
+
 export default function Home() {
+  // Venues list (+ review counts)
   const [venues, setVenues] = useState<VenueWithCount[]>([]);
   const [venuesLoading, setVenuesLoading] = useState(true);
   const [venuesError, setVenuesError] = useState<string | null>(null);
 
+  // Add venue form
   const [venueName, setVenueName] = useState("");
   const [venueCity, setVenueCity] = useState("");
   const [venueType, setVenueType] = useState("");
 
+  // Google Places pick
   const [placePick, setPlacePick] = useState<PlacePick | null>(null);
+
+  // Browse controls
+  const [search, setSearch] = useState("");
+  const [cityFilter, setCityFilter] = useState<string>("ALL");
+  const [sort, setSort] = useState<SortMode>("NEWEST");
 
   async function loadVenues() {
     setVenuesLoading(true);
@@ -45,7 +64,7 @@ export default function Home() {
       .from("venues")
       .select("id,name,city,state,venue_type,created_at")
       .order("created_at", { ascending: false })
-      .limit(50);
+      .limit(200);
 
     if (venuesErr) {
       setVenuesError(venuesErr.message);
@@ -131,9 +150,48 @@ export default function Home() {
 
   const googleEnabled = Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY);
 
+  const cityOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const v of venues) {
+      if (v.city) set.add(titleCase(v.city));
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [venues]);
+
+  const filteredVenues = useMemo(() => {
+    const q = normalizeSpaces(search).toLowerCase();
+
+    let list = venues.slice();
+
+    if (cityFilter !== "ALL") {
+      list = list.filter((v) => titleCase(v.city) === cityFilter);
+    }
+
+    if (q) {
+      list = list.filter((v) => {
+        const hay = `${v.name} ${v.city} ${v.state} ${v.venue_type ?? ""}`.toLowerCase();
+        return hay.includes(q);
+      });
+    }
+
+    list.sort((a, b) => {
+      const da = new Date(a.created_at).getTime();
+      const db = new Date(b.created_at).getTime();
+
+      if (sort === "NEWEST") return db - da;
+      if (sort === "OLDEST") return da - db;
+      if (sort === "MOST_REVIEWS") return (b.review_count ?? 0) - (a.review_count ?? 0);
+
+      return 0;
+    });
+
+    return list;
+  }, [venues, search, cityFilter, sort]);
+
   return (
     <main className="min-h-screen bg-white">
-      <div className="mx-auto max-w-3xl px-6 py-12">
+      <div className="mx-auto max-w-6xl px-6 py-12">
+        {/* Title */}
         <div>
           <h1 className="text-4xl font-bold tracking-tight">KnowTheTips</h1>
           <p className="mt-2 text-neutral-600">
@@ -141,126 +199,182 @@ export default function Home() {
           </p>
         </div>
 
-        <section className="mt-10 rounded-2xl border border-neutral-200 p-6">
-          <h2 className="text-xl font-semibold">Add a venue</h2>
+        {/* Two-column hero area */}
+        <div className="mt-10 grid gap-6 lg:grid-cols-2">
+          {/* LEFT: Browse venues */}
+          <section className="rounded-2xl border border-neutral-200 p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold">Browse venues</h2>
+                <p className="mt-1 text-sm text-neutral-600">
+                  Search and filter what’s already in the database.
+                </p>
+              </div>
 
-          <div className="mt-4 grid gap-2">
-            <div className="text-sm font-medium">
-              Search with Google (autocomplete)
+              <button
+                onClick={loadVenues}
+                className="rounded-xl border border-neutral-200 px-3 py-2 text-sm hover:bg-neutral-50"
+              >
+                Refresh
+              </button>
             </div>
 
-            <PlacesAutocomplete
-              placeholder="Start typing a venue name…"
-              onPick={(p) => {
-                setPlacePick(p);
-                setVenueName(p.name || "");
-                setVenueCity(p.city || "");
-              }}
-              country="us"
+            <input
+              className="mt-4 w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
+              placeholder="Search name, city, type…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
             />
 
-            {placePick ? (
-              <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-800">
-                <div className="font-medium">Selected:</div>
-                <div className="mt-1">
-                  {placePick.formattedAddress || "Address unavailable"}
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <label className="grid gap-2">
+                <span className="text-sm font-medium">City</span>
+                <select
+                  className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
+                  value={cityFilter}
+                  onChange={(e) => setCityFilter(e.target.value)}
+                >
+                  <option value="ALL">All</option>
+                  {cityOptions.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="grid gap-2">
+                <span className="text-sm font-medium">Sort</span>
+                <select
+                  className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value as SortMode)}
+                >
+                  <option value="NEWEST">Newest</option>
+                  <option value="OLDEST">Oldest</option>
+                  <option value="MOST_REVIEWS">Most reviews</option>
+                </select>
+              </label>
+            </div>
+
+            <p className="mt-3 text-sm text-neutral-600">
+              Showing <span className="font-medium">{filteredVenues.length}</span> of{" "}
+              <span className="font-medium">{venues.length}</span>
+            </p>
+
+            {/* Results list */}
+            <div className="mt-4 grid gap-3">
+              {venuesLoading ? (
+                <p className="text-neutral-600">Loading venues…</p>
+              ) : venuesError ? (
+                <p className="text-red-600">Error: {venuesError}</p>
+              ) : filteredVenues.length === 0 ? (
+                <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-5 text-sm text-neutral-700">
+                  No venues match your filters yet.
                 </div>
-              </div>
-            ) : (
-              <div className="text-xs text-neutral-500">
-                {googleEnabled
-                  ? "Pick a result to auto-fill the form below."
-                  : "Google key not detected — use manual entry below."}
-              </div>
-            )}
-          </div>
+              ) : (
+                filteredVenues.map((v) => (
+                  <Link
+                    key={v.id}
+                    href={`/venues/${v.id}`}
+                    className="block rounded-2xl border border-neutral-200 p-5 transition hover:bg-neutral-50"
+                  >
+                    <div className="flex justify-between gap-4">
+                      <div>
+                        <div className="text-lg font-semibold">{v.name}</div>
+                        <div className="text-sm text-neutral-600">
+                          {v.city}, {v.state}
+                          {v.venue_type ? ` • ${v.venue_type}` : ""}
+                        </div>
+                        <div className="mt-1 text-sm text-neutral-500">
+                          {v.review_count} review{v.review_count === 1 ? "" : "s"}
+                        </div>
+                      </div>
 
-          <form onSubmit={addVenue} className="mt-4 grid gap-3">
-            <input
-              className="w-full rounded-xl border border-neutral-200 px-4 py-3"
-              placeholder="Venue name (required)"
-              value={venueName}
-              onChange={(e) => {
-                setVenueName(e.target.value);
-                if (
-                  placePick &&
-                  e.target.value.trim() !== placePick.name.trim()
-                ) {
-                  setPlacePick(null);
-                }
-              }}
-            />
-            <input
-              className="w-full rounded-xl border border-neutral-200 px-4 py-3"
-              placeholder="City (required)"
-              value={venueCity}
-              onChange={(e) => {
-                setVenueCity(e.target.value);
-                if (
-                  placePick &&
-                  e.target.value.trim() !== placePick.city.trim()
-                ) {
-                  setPlacePick(null);
-                }
-              }}
-            />
-            <input
-              className="w-full rounded-xl border border-neutral-200 px-4 py-3"
-              placeholder="Venue type (optional) — bar, restaurant, etc"
-              value={venueType}
-              onChange={(e) => setVenueType(e.target.value)}
-            />
-
-            <button className="mt-2 w-full rounded-xl bg-black px-4 py-3 font-medium text-white">
-              Add venue
-            </button>
-          </form>
-        </section>
-
-        <section className="mt-10">
-          <div className="flex items-end justify-between gap-4">
-            <h2 className="text-2xl font-semibold">Venues</h2>
-            <button
-              onClick={loadVenues}
-              className="rounded-xl border border-neutral-200 px-3 py-2 text-sm"
-            >
-              Refresh
-            </button>
-          </div>
-
-          {venuesLoading && (
-            <p className="mt-4 text-neutral-600">Loading venues…</p>
-          )}
-          {venuesError && (
-            <p className="mt-4 text-red-600">Error: {venuesError}</p>
-          )}
-
-          <div className="mt-4 grid gap-3">
-            {venues.map((v) => (
-              <Link
-                key={v.id}
-                href={`/venues/${v.id}`}
-                className="block rounded-2xl border border-neutral-200 p-5 hover:bg-neutral-50"
-              >
-                <div className="flex justify-between">
-                  <div>
-                    <div className="text-lg font-semibold">{v.name}</div>
-                    <div className="text-sm text-neutral-600">
-                      {v.city}, {v.state}
-                      {v.venue_type ? ` • ${v.venue_type}` : ""}
+                      <div className="text-xs text-neutral-500">
+                        {new Date(v.created_at).toLocaleDateString()}
+                      </div>
                     </div>
-                    <div className="mt-1 text-sm text-neutral-500">
-                      {v.review_count} review{v.review_count === 1 ? "" : "s"}
-                    </div>
-                  </div>
-                  <div className="text-xs text-neutral-500">
-                    {new Date(v.created_at).toLocaleDateString()}
+                  </Link>
+                ))
+              )}
+            </div>
+          </section>
+
+          {/* RIGHT: Add a venue */}
+          <section className="rounded-2xl border border-neutral-200 p-6">
+            <h2 className="text-xl font-semibold">Add a venue</h2>
+            <p className="mt-1 text-sm text-neutral-600">
+              Use Google autocomplete to reduce typos (manual entry still works).
+            </p>
+
+            <div className="mt-4 grid gap-2">
+              <div className="text-sm font-medium">Search with Google</div>
+
+              <PlacesAutocomplete
+                placeholder="Start typing a venue name…"
+                onPick={(p) => {
+                  setPlacePick(p);
+                  setVenueName(p.name || "");
+                  setVenueCity(p.city || "");
+                }}
+                country="us"
+              />
+
+              {placePick ? (
+                <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-800">
+                  <div className="font-medium">Selected:</div>
+                  <div className="mt-1">
+                    {placePick.formattedAddress || "Address unavailable"}
                   </div>
                 </div>
-              </Link>
-            ))}
-          </div>
-        </section>
+              ) : (
+                <div className="text-xs text-neutral-500">
+                  {googleEnabled
+                    ? "Pick a result to auto-fill the form below."
+                    : "Google key not detected — use manual entry below."}
+                </div>
+              )}
+            </div>
+
+            <form onSubmit={addVenue} className="mt-4 grid gap-3">
+              <input
+                className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
+                placeholder="Venue name (required)"
+                value={venueName}
+                onChange={(e) => {
+                  setVenueName(e.target.value);
+                  if (placePick && e.target.value.trim() !== placePick.name.trim()) {
+                    setPlacePick(null);
+                  }
+                }}
+              />
+
+              <input
+                className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
+                placeholder="City (required)"
+                value={venueCity}
+                onChange={(e) => {
+                  setVenueCity(e.target.value);
+                  if (placePick && e.target.value.trim() !== placePick.city.trim()) {
+                    setPlacePick(null);
+                  }
+                }}
+              />
+
+              <input
+                className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
+                placeholder="Venue type (optional) — bar, restaurant, etc"
+                value={venueType}
+                onChange={(e) => setVenueType(e.target.value)}
+              />
+
+              <button className="mt-2 w-full rounded-xl bg-black px-4 py-3 font-medium text-white hover:bg-neutral-800">
+                Add venue
+              </button>
+            </form>
+          </section>
+        </div>
       </div>
     </main>
   );
