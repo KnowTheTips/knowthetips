@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function Footer() {
   return (
     <footer className="mt-16 border-t border-neutral-200 bg-white">
@@ -27,14 +29,31 @@ export default function Footer() {
             </p>
 
             <div className="mt-3 flex gap-4 md:justify-end">
-              <span className="text-xs text-neutral-500">Privacy</span>
-              <span className="text-xs text-neutral-500">Terms</span>
-              <span className="text-xs text-neutral-500">Contact</span>
+              <Link
+                href="/privacy"
+                className="text-xs text-neutral-500 hover:text-neutral-800 underline"
+              >
+                Privacy
+              </Link>
+              <Link
+                href="/terms"
+                className="text-xs text-neutral-500 hover:text-neutral-800 underline"
+              >
+                Terms
+              </Link>
+              <Link
+                href="/contact"
+                className="text-xs text-neutral-500 hover:text-neutral-800 underline"
+              >
+                Contact
+              </Link>
             </div>
           </div>
         </div>
 
-        <p className="mt-8 text-xs text-neutral-500">© {new Date().getFullYear()} KnowTheTips</p>
+        <p className="mt-8 text-xs text-neutral-500">
+          © {new Date().getFullYear()} KnowTheTips
+        </p>
       </div>
     </footer>
   );
