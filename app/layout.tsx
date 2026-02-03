@@ -50,31 +50,56 @@ export default function RootLayout({
         }}
       >
         {googleSrc ? (
-          <Script
-            id="google-maps-js"
-            src={googleSrc}
-            strategy="afterInteractive"
-          />
+          <Script id="google-maps-js" src={googleSrc} strategy="afterInteractive" />
         ) : null}
 
         {/* Header */}
-        <header className="border-b border-neutral-200 bg-white">
-          <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-4">
-            <Link href="/" className="text-base font-semibold text-neutral-900">
-              KnowTheTips
+        <header className="sticky top-0 z-40 border-b border-neutral-200 bg-white/90 backdrop-blur">
+          <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+            {/* Left: brand */}
+            <Link href="/" className="flex items-center gap-3">
+              <span
+                aria-hidden="true"
+                className="h-9 w-9 rounded-2xl bg-black"
+              />
+              <span className="text-base font-semibold text-neutral-900">
+                KnowTheTips
+              </span>
             </Link>
 
-            <nav className="flex items-center gap-6">
-              <Link href="/" className="text-sm text-neutral-700 hover:underline">
-                Home
-              </Link>
-              <Link
-                href="/how-it-works"
-                className="text-sm text-neutral-700 hover:underline"
-              >
+            {/* Center: nav (desktop) */}
+            <nav className="hidden items-center gap-8 text-sm text-neutral-700 md:flex">
+              <Link href="/how-it-works" className="hover:text-neutral-900">
                 How it works
               </Link>
+              {/* These can point to sections on the homepage if you want */}
+              <Link href="/#browse" className="hover:text-neutral-900">
+                Browse
+              </Link>
+              <Link href="/#add-venue" className="hover:text-neutral-900">
+                Add a venue
+              </Link>
             </nav>
+
+            {/* Right: actions */}
+            <div className="flex items-center gap-2">
+              {/* Placeholder (won't break anything). You can wire this later. */}
+              <button
+                type="button"
+                className="hidden rounded-xl border border-neutral-200 px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 md:inline-flex"
+                title="Sign in coming soon"
+                disabled
+              >
+                Sign in
+              </button>
+
+              <Link
+                href="/#add-venue"
+                className="inline-flex rounded-xl bg-black px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+              >
+                Add a venue
+              </Link>
+            </div>
           </div>
         </header>
 
