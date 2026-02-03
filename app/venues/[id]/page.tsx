@@ -111,12 +111,7 @@ type ReviewSort = "newest" | "oldest" | "tips_desc" | "hours_desc";
 function FlagIcon({ className = "" }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className={className}>
-      <path
-        d="M6 3v18"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
+      <path d="M6 3v18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
       <path
         d="M6 4h10l-1.5 3L18 10H6"
         stroke="currentColor"
@@ -125,6 +120,49 @@ function FlagIcon({ className = "" }: { className?: string }) {
       />
     </svg>
   );
+}
+
+/** ---------------------------
+ * Anti-spam: anonymous reviewer token
+ * --------------------------- */
+const ANON_TOKEN_KEY = "kt_anon_token";
+const reviewedKey = (venueId: string) => `kt_reviewed_${venueId}`;
+
+function randomToken() {
+  // Simple, stable-enough token for anon users (not security-sensitive)
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function getOrCreateAnonToken(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    const existing = window.localStorage.getItem(ANON_TOKEN_KEY);
+    if (existing && existing.length >= 8) return existing;
+    const created = randomToken();
+    window.localStorage.setItem(ANON_TOKEN_KEY, created);
+    return created;
+  } catch {
+    // If localStorage is blocked, we fall back to in-memory behavior (no hard block possible)
+    return "";
+  }
+}
+
+function hasReviewedVenue(venueId: string): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(reviewedKey(venueId)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function markReviewedVenue(venueId: string) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(reviewedKey(venueId), "1");
+  } catch {
+    // ignore
+  }
 }
 
 export default function VenuePage() {
@@ -153,9 +191,7 @@ export default function VenuePage() {
   const [hoursWeekly, setHoursWeekly] = useState<string>("");
   const [tipPool, setTipPool] = useState<boolean>(false);
   const [busySeason, setBusySeason] = useState<string>("");
-  const [earningsLabel, setEarningsLabel] = useState<"pre-tax" | "post-tax">(
-    "pre-tax"
-  );
+  const [earningsLabel, setEarningsLabel] = useState<"pre-tax" | "post-tax">("pre-tax");
 
   // City suggestions
   const [allCities, setAllCities] = useState<string[]>([]);
@@ -164,19 +200,18 @@ export default function VenuePage() {
   const [reviewSort, setReviewSort] = useState<ReviewSort>("newest");
   const [filterRecommendedOnly, setFilterRecommendedOnly] = useState(false);
   const [filterTipPoolOnly, setFilterTipPoolOnly] = useState(false);
-  const [hideMissingForNumericSort, setHideMissingForNumericSort] =
-    useState(true);
+  const [hideMissingForNumericSort, setHideMissingForNumericSort] = useState(true);
 
   // Report review
-  const [reportingReviewId, setReportingReviewId] = useState<string | null>(
-    null
-  );
+  const [reportingReviewId, setReportingReviewId] = useState<string | null>(null);
   const [reportReason, setReportReason] = useState("");
   const [reportSubmitting, setReportSubmitting] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
-  const [reportedReviewIds, setReportedReviewIds] = useState<Set<string>>(
-    () => new Set()
-  );
+  const [reportedReviewIds, setReportedReviewIds] = useState<Set<string>>(() => new Set());
+
+  // Anti-spam (one review per venue per browser/device)
+  const [anonToken, setAnonToken] = useState<string>("");
+  const [alreadyReviewedHere, setAlreadyReviewedHere] = useState(false);
 
   function openReport(reviewId: string) {
     setReportError(null);
@@ -257,9 +292,7 @@ export default function VenuePage() {
     setVenue(data as Venue);
     setEditName((data as Venue).name ?? "");
     setEditCity(titleCase((data as Venue).city ?? ""));
-    setEditType(
-      (data as Venue).venue_type ? titleCase((data as Venue).venue_type!) : ""
-    );
+    setEditType((data as Venue).venue_type ? titleCase((data as Venue).venue_type!) : "");
 
     setVenueLoading(false);
   }
@@ -325,15 +358,20 @@ export default function VenuePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [venueId]);
 
+  // Setup anon token + localStorage review lock for this venue
+  useEffect(() => {
+    if (!venueId) return;
+    const tok = getOrCreateAnonToken();
+    setAnonToken(tok);
+    setAlreadyReviewedHere(hasReviewedVenue(venueId));
+  }, [venueId]);
+
   const reviewCountLabel = useMemo(() => {
     const n = reviews.length;
     return `${n} ${n === 1 ? "review" : "reviews"}`;
   }, [reviews.length]);
 
-  const editCitySuggestion = useMemo(
-    () => bestCitySuggestion(editCity, allCities),
-    [editCity, allCities]
-  );
+  const editCitySuggestion = useMemo(() => bestCitySuggestion(editCity, allCities), [editCity, allCities]);
 
   const summary = useMemo(() => {
     const total = reviews.length;
@@ -351,20 +389,13 @@ export default function VenuePage() {
     const tipPoolKnown = reviews.filter((r) => r.tip_pool !== null);
     const tipPoolYes = tipPoolKnown.filter((r) => r.tip_pool === true).length;
 
-    const avgTips =
-      tipsVals.length > 0
-        ? tipsVals.reduce((a, b) => a + b, 0) / tipsVals.length
-        : null;
+    const avgTips = tipsVals.length > 0 ? tipsVals.reduce((a, b) => a + b, 0) / tipsVals.length : null;
 
-    const avgHours =
-      hoursVals.length > 0
-        ? hoursVals.reduce((a, b) => a + b, 0) / hoursVals.length
-        : null;
+    const avgHours = hoursVals.length > 0 ? hoursVals.reduce((a, b) => a + b, 0) / hoursVals.length : null;
 
     const pctRecommended = total > 0 ? (recommendedCount / total) * 100 : null;
 
-    const pctTipPool =
-      tipPoolKnown.length > 0 ? (tipPoolYes / tipPoolKnown.length) * 100 : null;
+    const pctTipPool = tipPoolKnown.length > 0 ? (tipPoolYes / tipPoolKnown.length) * 100 : null;
 
     return {
       total,
@@ -384,8 +415,7 @@ export default function VenuePage() {
     if (filterRecommendedOnly) list = list.filter((r) => r.recommended);
     if (filterTipPoolOnly) list = list.filter((r) => r.tip_pool === true);
 
-    const isNumericSort =
-      reviewSort === "tips_desc" || reviewSort === "hours_desc";
+    const isNumericSort = reviewSort === "tips_desc" || reviewSort === "hours_desc";
     if (isNumericSort && hideMissingForNumericSort) {
       list = list.filter((r) =>
         reviewSort === "tips_desc"
@@ -399,7 +429,8 @@ export default function VenuePage() {
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       }
       if (reviewSort === "oldest") {
-        return new Date(a.created_at).getTime() - new Date(a.created_at).getTime();
+        // FIXED: previously subtracted the same value from itself
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
       }
       if (reviewSort === "tips_desc") {
         const av = typeof a.tips_weekly === "number" ? a.tips_weekly : -Infinity;
@@ -415,13 +446,7 @@ export default function VenuePage() {
     });
 
     return list;
-  }, [
-    reviews,
-    filterRecommendedOnly,
-    filterTipPoolOnly,
-    reviewSort,
-    hideMissingForNumericSort,
-  ]);
+  }, [reviews, filterRecommendedOnly, filterTipPoolOnly, reviewSort, hideMissingForNumericSort]);
 
   async function saveVenueEdits() {
     if (!venueId) return;
@@ -443,10 +468,7 @@ export default function VenuePage() {
     const city = titleCase(cityRaw);
     const venue_type = typeRaw ? titleCase(typeRaw) : null;
 
-    const { error } = await supabase
-      .from("venues")
-      .update({ name, city, venue_type })
-      .eq("id", venueId);
+    const { error } = await supabase.from("venues").update({ name, city, venue_type }).eq("id", venueId);
 
     if (error) return alert("Error saving venue: " + error.message);
 
@@ -457,6 +479,12 @@ export default function VenuePage() {
   async function addReview(e: React.FormEvent) {
     e.preventDefault();
     if (!venueId) return;
+
+    // Frontend safeguard (browser/device)
+    if (alreadyReviewedHere) {
+      alert("You’ve already submitted a review for this venue from this device.");
+      return;
+    }
 
     const roleValue = normalizeSpaces(role);
     if (!roleValue) return alert("Role is required.");
@@ -471,7 +499,7 @@ export default function VenuePage() {
       return alert("Hours weekly must be a valid number (or blank).");
     }
 
-    const payload: Partial<Review> & { venue_id: string; role: string } = {
+    const payload: any = {
       venue_id: venueId,
       role: roleValue,
       recommended,
@@ -481,10 +509,31 @@ export default function VenuePage() {
       hours_weekly: hours,
       tip_pool: tipPool,
       busy_season: busySeason.trim() || null,
+
+      // DB enforcement layer (unique index should be venue_id + reviewer_token)
+      reviewer_token: anonToken || null,
     };
 
     const { error } = await supabase.from("reviews").insert(payload);
-    if (error) return alert("Error adding review: " + error.message);
+
+    if (error) {
+      const msg = (error as any)?.message || "Unknown error";
+      const code = (error as any)?.code;
+
+      // Unique violation usually 23505; also handle message containing duplicate
+      if (code === "23505" || msg.toLowerCase().includes("duplicate")) {
+        markReviewedVenue(venueId);
+        setAlreadyReviewedHere(true);
+        alert("You’ve already submitted a review for this venue from this device.");
+        return;
+      }
+
+      return alert("Error adding review: " + msg);
+    }
+
+    // Mark this device as having reviewed this venue
+    markReviewedVenue(venueId);
+    setAlreadyReviewedHere(true);
 
     setRecommended(false);
     setComment("");
@@ -529,13 +578,9 @@ export default function VenuePage() {
         {venueLoading ? (
           <p className="mt-6 text-neutral-600">Loading venue…</p>
         ) : venueError ? (
-          <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-5 text-red-700">
-            {venueError}
-          </div>
+          <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-5 text-red-700">{venueError}</div>
         ) : !venue ? (
-          <div className="mt-6 rounded-2xl border border-neutral-200 p-5">
-            Venue not found.
-          </div>
+          <div className="mt-6 rounded-2xl border border-neutral-200 p-5">Venue not found.</div>
         ) : (
           <>
             <section className="mt-6 rounded-2xl border border-neutral-200 p-6">
@@ -569,8 +614,7 @@ export default function VenuePage() {
                     {summary.avgTips == null ? "—" : fmtMoney(summary.avgTips)}
                   </div>
                   <div className="mt-1 text-xs text-neutral-500">
-                    based on {summary.tipsSample}{" "}
-                    {summary.tipsSample === 1 ? "entry" : "entries"}
+                    based on {summary.tipsSample} {summary.tipsSample === 1 ? "entry" : "entries"}
                   </div>
                 </div>
 
@@ -580,8 +624,7 @@ export default function VenuePage() {
                     {summary.avgHours == null ? "—" : Math.round(summary.avgHours)}
                   </div>
                   <div className="mt-1 text-xs text-neutral-500">
-                    based on {summary.hoursSample}{" "}
-                    {summary.hoursSample === 1 ? "entry" : "entries"}
+                    based on {summary.hoursSample} {summary.hoursSample === 1 ? "entry" : "entries"}
                   </div>
                 </div>
 
@@ -598,8 +641,7 @@ export default function VenuePage() {
                     {summary.pctTipPool == null ? "—" : fmtPct(summary.pctTipPool)}
                   </div>
                   <div className="mt-1 text-xs text-neutral-500">
-                    based on {summary.tipPoolSample}{" "}
-                    {summary.tipPoolSample === 1 ? "entry" : "entries"}
+                    based on {summary.tipPoolSample} {summary.tipPoolSample === 1 ? "entry" : "entries"}
                   </div>
                 </div>
               </div>
@@ -661,6 +703,15 @@ export default function VenuePage() {
             <section className="mt-10 rounded-2xl border border-neutral-200 p-6">
               <h2 className="text-2xl font-semibold">Add a review</h2>
 
+              {alreadyReviewedHere ? (
+                <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                  You’ve already submitted a review for this venue from this device.  
+                  <div className="mt-1 text-xs text-amber-800">
+                    (This is a simple anti-spam safeguard while the site remains login-free.)
+                  </div>
+                </div>
+              ) : null}
+
               <form onSubmit={addReview} className="mt-4 grid gap-3">
                 <div className="grid gap-2 md:grid-cols-2">
                   <label className="grid gap-2">
@@ -670,6 +721,7 @@ export default function VenuePage() {
                       value={role}
                       onChange={(e) => setRole(e.target.value)}
                       placeholder="server, bartender…"
+                      disabled={alreadyReviewedHere}
                     />
                   </label>
 
@@ -679,6 +731,7 @@ export default function VenuePage() {
                       className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
                       value={earningsLabel}
                       onChange={(e) => setEarningsLabel(e.target.value as "pre-tax" | "post-tax")}
+                      disabled={alreadyReviewedHere}
                     >
                       <option value="pre-tax">pre-tax</option>
                       <option value="post-tax">post-tax</option>
@@ -695,6 +748,7 @@ export default function VenuePage() {
                       value={tipsWeekly}
                       onChange={(e) => setTipsWeekly(e.target.value)}
                       placeholder="e.g. 1200"
+                      disabled={alreadyReviewedHere}
                     />
                   </label>
 
@@ -706,6 +760,7 @@ export default function VenuePage() {
                       value={hoursWeekly}
                       onChange={(e) => setHoursWeekly(e.target.value)}
                       placeholder="e.g. 32"
+                      disabled={alreadyReviewedHere}
                     />
                   </label>
                 </div>
@@ -716,6 +771,7 @@ export default function VenuePage() {
                       type="checkbox"
                       checked={recommended}
                       onChange={(e) => setRecommended(e.target.checked)}
+                      disabled={alreadyReviewedHere}
                     />
                     <span className="text-sm">Recommended</span>
                   </label>
@@ -725,6 +781,7 @@ export default function VenuePage() {
                       type="checkbox"
                       checked={tipPool}
                       onChange={(e) => setTipPool(e.target.checked)}
+                      disabled={alreadyReviewedHere}
                     />
                     <span className="text-sm">Tip pool</span>
                   </label>
@@ -737,6 +794,7 @@ export default function VenuePage() {
                     value={busySeason}
                     onChange={(e) => setBusySeason(e.target.value)}
                     placeholder="Summer, holidays, year-round…"
+                    disabled={alreadyReviewedHere}
                   />
                 </label>
 
@@ -747,13 +805,15 @@ export default function VenuePage() {
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
                     placeholder="Anonymous notes about management, volume, schedule…"
+                    disabled={alreadyReviewedHere}
                   />
                 </label>
 
                 <div className="flex gap-2">
                   <button
                     type="submit"
-                    className="rounded-xl bg-black px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+                    disabled={alreadyReviewedHere}
+                    className="rounded-xl bg-black px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
                   >
                     Submit review
                   </button>
@@ -769,7 +829,8 @@ export default function VenuePage() {
                       setEarningsLabel("pre-tax");
                       setRole("server");
                     }}
-                    className="rounded-xl border border-neutral-200 px-4 py-2 text-sm hover:bg-neutral-50"
+                    disabled={alreadyReviewedHere}
+                    className="rounded-xl border border-neutral-200 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
                   >
                     Clear
                   </button>
@@ -825,8 +886,7 @@ export default function VenuePage() {
                         onChange={(e) => setHideMissingForNumericSort(e.target.checked)}
                       />
                       <span className="text-sm text-neutral-700">
-                        Hide reviews missing {reviewSort === "tips_desc" ? "tips" : "hours"} for this
-                        sort
+                        Hide reviews missing {reviewSort === "tips_desc" ? "tips" : "hours"} for this sort
                       </span>
                     </label>
                   </div>
@@ -925,9 +985,7 @@ export default function VenuePage() {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <h3 className="text-lg font-semibold">Report review</h3>
-                      <p className="mt-1 text-sm text-neutral-600">
-                        Optional: tell us why. This stays anonymous.
-                      </p>
+                      <p className="mt-1 text-sm text-neutral-600">Optional: tell us why. This stays anonymous.</p>
                     </div>
                     <button
                       onClick={closeReport}
