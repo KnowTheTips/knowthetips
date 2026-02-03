@@ -201,7 +201,81 @@ export default function Home() {
 
         {/* Two-column hero area */}
         <div className="mt-10 grid gap-6 lg:grid-cols-2">
-          {/* LEFT: Browse venues */}
+          {/* FIRST (mobile) / LEFT (desktop): Add a venue */}
+          <section className="rounded-2xl border border-neutral-200 p-6">
+            <h2 className="text-xl font-semibold">Add a venue</h2>
+            <p className="mt-1 text-sm text-neutral-600">
+              Use Google autocomplete to reduce typos (manual entry still works).
+            </p>
+
+            <div className="mt-4 grid gap-2">
+              <div className="text-sm font-medium">Search with Google</div>
+
+              <PlacesAutocomplete
+                placeholder="Start typing a venue name…"
+                onPick={(p) => {
+                  setPlacePick(p);
+                  setVenueName(p.name || "");
+                  setVenueCity(p.city || "");
+                }}
+                country="us"
+              />
+
+              {placePick ? (
+                <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-800">
+                  <div className="font-medium">Selected:</div>
+                  <div className="mt-1">
+                    {placePick.formattedAddress || "Address unavailable"}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-xs text-neutral-500">
+                  {googleEnabled
+                    ? "Pick a result to auto-fill the form below."
+                    : "Google key not detected — use manual entry below."}
+                </div>
+              )}
+            </div>
+
+            <form onSubmit={addVenue} className="mt-4 grid gap-3">
+              <input
+                className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
+                placeholder="Venue name (required)"
+                value={venueName}
+                onChange={(e) => {
+                  setVenueName(e.target.value);
+                  if (placePick && e.target.value.trim() !== placePick.name.trim()) {
+                    setPlacePick(null);
+                  }
+                }}
+              />
+
+              <input
+                className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
+                placeholder="City (required)"
+                value={venueCity}
+                onChange={(e) => {
+                  setVenueCity(e.target.value);
+                  if (placePick && e.target.value.trim() !== placePick.city.trim()) {
+                    setPlacePick(null);
+                  }
+                }}
+              />
+
+              <input
+                className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
+                placeholder="Venue type (optional) — bar, restaurant, etc"
+                value={venueType}
+                onChange={(e) => setVenueType(e.target.value)}
+              />
+
+              <button className="mt-2 w-full rounded-xl bg-black px-4 py-3 font-medium text-white hover:bg-neutral-800">
+                Add venue
+              </button>
+            </form>
+          </section>
+
+          {/* SECOND (mobile) / RIGHT (desktop): Browse venues */}
           <section className="rounded-2xl border border-neutral-200 p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -299,80 +373,6 @@ export default function Home() {
                 ))
               )}
             </div>
-          </section>
-
-          {/* RIGHT: Add a venue */}
-          <section className="rounded-2xl border border-neutral-200 p-6">
-            <h2 className="text-xl font-semibold">Add a venue</h2>
-            <p className="mt-1 text-sm text-neutral-600">
-              Use Google autocomplete to reduce typos (manual entry still works).
-            </p>
-
-            <div className="mt-4 grid gap-2">
-              <div className="text-sm font-medium">Search with Google</div>
-
-              <PlacesAutocomplete
-                placeholder="Start typing a venue name…"
-                onPick={(p) => {
-                  setPlacePick(p);
-                  setVenueName(p.name || "");
-                  setVenueCity(p.city || "");
-                }}
-                country="us"
-              />
-
-              {placePick ? (
-                <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-800">
-                  <div className="font-medium">Selected:</div>
-                  <div className="mt-1">
-                    {placePick.formattedAddress || "Address unavailable"}
-                  </div>
-                </div>
-              ) : (
-                <div className="text-xs text-neutral-500">
-                  {googleEnabled
-                    ? "Pick a result to auto-fill the form below."
-                    : "Google key not detected — use manual entry below."}
-                </div>
-              )}
-            </div>
-
-            <form onSubmit={addVenue} className="mt-4 grid gap-3">
-              <input
-                className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
-                placeholder="Venue name (required)"
-                value={venueName}
-                onChange={(e) => {
-                  setVenueName(e.target.value);
-                  if (placePick && e.target.value.trim() !== placePick.name.trim()) {
-                    setPlacePick(null);
-                  }
-                }}
-              />
-
-              <input
-                className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
-                placeholder="City (required)"
-                value={venueCity}
-                onChange={(e) => {
-                  setVenueCity(e.target.value);
-                  if (placePick && e.target.value.trim() !== placePick.city.trim()) {
-                    setPlacePick(null);
-                  }
-                }}
-              />
-
-              <input
-                className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
-                placeholder="Venue type (optional) — bar, restaurant, etc"
-                value={venueType}
-                onChange={(e) => setVenueType(e.target.value)}
-              />
-
-              <button className="mt-2 w-full rounded-xl bg-black px-4 py-3 font-medium text-white hover:bg-neutral-800">
-                Add venue
-              </button>
-            </form>
           </section>
         </div>
       </div>
