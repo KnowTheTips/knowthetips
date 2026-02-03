@@ -160,6 +160,7 @@ export default function Home() {
 
   const filteredVenues = useMemo(() => {
     const q = normalizeSpaces(search).toLowerCase();
+
     let list = venues.slice();
 
     if (cityFilter !== "ALL") {
@@ -180,6 +181,7 @@ export default function Home() {
       if (sort === "NEWEST") return db - da;
       if (sort === "OLDEST") return da - db;
       if (sort === "MOST_REVIEWS") return (b.review_count ?? 0) - (a.review_count ?? 0);
+
       return 0;
     });
 
@@ -189,12 +191,11 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-white">
       <div className="mx-auto max-w-6xl px-6 py-12">
-        {/* Hero */}
-        <div className="grid gap-8 lg:grid-cols-2 lg:items-start">
-          {/* Left: headline */}
-          <section className="pt-2">
-            <div className="inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-4 py-2 text-xs text-neutral-700">
-              <span>Real reviews for bartenders &amp; servers</span>
+        {/* HERO (no fake stats card) */}
+        <section className="pt-2">
+          <div className="max-w-3xl">
+            <div className="inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-4 py-2 text-sm text-neutral-700">
+              <span className="font-medium">Real reviews for bartenders & servers</span>
               <span className="text-neutral-300">•</span>
               <span>Tips</span>
               <span className="text-neutral-300">•</span>
@@ -203,14 +204,13 @@ export default function Home() {
               <span>Expectations</span>
             </div>
 
-            <h1 className="mt-6 text-5xl font-bold tracking-tight sm:text-6xl">
+            <h1 className="mt-6 text-5xl font-bold leading-[1.05] tracking-tight md:text-6xl">
               Know the tips{" "}
               <span className="text-neutral-400">before</span>{" "}
-              {/* FIX: explicit spacing so it never becomes "beforeyou" */}
               you take the job.
             </h1>
 
-            <p className="mt-5 max-w-xl text-lg text-neutral-700">
+            <p className="mt-6 text-lg leading-relaxed text-neutral-700 md:text-xl">
               Search a bar or restaurant and see what staff actually report: average tips,
               seasonality, tip pool setup, and whether they’d recommend the gig.
             </p>
@@ -218,62 +218,19 @@ export default function Home() {
             <p className="mt-4 text-sm text-neutral-500">
               Tip reporting note: entries may be labeled as pre-tax or post-tax.
             </p>
-          </section>
+          </div>
+        </section>
 
-          {/* Right: (optional) spacer area or future preview card */}
-          <section className="hidden lg:block">
-            <div className="rounded-3xl border border-neutral-200 bg-neutral-50 p-6">
-              <div className="text-sm font-semibold text-neutral-800">What you’ll see</div>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl border border-neutral-200 bg-white p-4">
-                  <div className="text-xs text-neutral-500">Avg tips / wk</div>
-                  <div className="mt-1 text-lg font-semibold">$ —</div>
-                </div>
-                <div className="rounded-2xl border border-neutral-200 bg-white p-4">
-                  <div className="text-xs text-neutral-500">Avg hours / wk</div>
-                  <div className="mt-1 text-lg font-semibold">—</div>
-                </div>
-                <div className="rounded-2xl border border-neutral-200 bg-white p-4">
-                  <div className="text-xs text-neutral-500">Tip pool</div>
-                  <div className="mt-1 text-lg font-semibold">—</div>
-                </div>
-                <div className="rounded-2xl border border-neutral-200 bg-white p-4">
-                  <div className="text-xs text-neutral-500">Recommended</div>
-                  <div className="mt-1 text-lg font-semibold">—</div>
-                </div>
-              </div>
-
-              <div className="mt-5 flex gap-3">
-                <Link
-                  href="/#browse"
-                  className="flex-1 rounded-xl border border-neutral-200 bg-white px-4 py-3 text-center text-sm font-medium hover:bg-neutral-50"
-                >
-                  Browse venues
-                </Link>
-                <Link
-                  href="/#add-venue"
-                  className="flex-1 rounded-xl bg-black px-4 py-3 text-center text-sm font-medium text-white hover:opacity-90"
-                >
-                  Add a venue
-                </Link>
-              </div>
-            </div>
-          </section>
-        </div>
-
-        {/* Two-column area (mobile: Add first, Browse second) */}
+        {/* TWO PRIMARY CARDS */}
         <div className="mt-10 grid gap-6 lg:grid-cols-2">
-          {/* ADD (mobile first) */}
-          <section
-            id="add-venue"
-            className="order-1 rounded-2xl border border-neutral-200 p-6 lg:order-2"
-          >
-            <h2 className="text-xl font-semibold">Add a venue</h2>
+          {/* ADD A VENUE (first in DOM so it appears first on mobile) */}
+          <section id="add-venue" className="rounded-2xl border border-neutral-200 p-6">
+            <h2 className="text-2xl font-semibold">Add a venue</h2>
             <p className="mt-1 text-sm text-neutral-600">
               Use Google autocomplete to reduce typos (manual entry still works).
             </p>
 
-            <div className="mt-4 grid gap-2">
+            <div className="mt-5 grid gap-2">
               <div className="text-sm font-medium">Search with Google</div>
 
               <PlacesAutocomplete
@@ -302,7 +259,7 @@ export default function Home() {
               )}
             </div>
 
-            <form onSubmit={addVenue} className="mt-4 grid gap-3">
+            <form onSubmit={addVenue} className="mt-5 grid gap-3">
               <input
                 className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
                 placeholder="Venue name (required)"
@@ -340,14 +297,11 @@ export default function Home() {
             </form>
           </section>
 
-          {/* BROWSE (mobile second) */}
-          <section
-            id="browse"
-            className="order-2 rounded-2xl border border-neutral-200 p-6 lg:order-1"
-          >
+          {/* BROWSE */}
+          <section id="browse" className="rounded-2xl border border-neutral-200 p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-xl font-semibold">Browse venues</h2>
+                <h2 className="text-2xl font-semibold">Browse venues</h2>
                 <p className="mt-1 text-sm text-neutral-600">
                   Search and filter what’s already in the database.
                 </p>
@@ -362,7 +316,7 @@ export default function Home() {
             </div>
 
             <input
-              className="mt-4 w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
+              className="mt-5 w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
               placeholder="Search name, city, type…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
