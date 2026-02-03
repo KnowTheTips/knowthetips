@@ -135,8 +135,25 @@ export default function Home() {
     }
 
     const { error } = await supabase.from("venues").insert(insertPayload);
+
     if (error) {
-      alert("Error adding venue: " + error.message);
+      const msg = (error as any)?.message ?? "";
+      const code = (error as any)?.code ?? "";
+      const details = (error as any)?.details ?? "";
+
+      const isDuplicate =
+        code === "23505" ||
+        msg.includes("duplicate key value") ||
+        msg.includes("venues_unique_name_city_state") ||
+        details.includes("venues_unique_name_city_state");
+
+      if (isDuplicate) {
+        alert(
+          "That venue is already in KnowTheTips for that city.\n\nTry finding it under “Browse venues” instead."
+        );
+      } else {
+        alert("Error adding venue: " + msg);
+      }
       return;
     }
 
