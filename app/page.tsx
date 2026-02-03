@@ -160,7 +160,6 @@ export default function Home() {
 
   const filteredVenues = useMemo(() => {
     const q = normalizeSpaces(search).toLowerCase();
-
     let list = venues.slice();
 
     if (cityFilter !== "ALL") {
@@ -181,7 +180,6 @@ export default function Home() {
       if (sort === "NEWEST") return db - da;
       if (sort === "OLDEST") return da - db;
       if (sort === "MOST_REVIEWS") return (b.review_count ?? 0) - (a.review_count ?? 0);
-
       return 0;
     });
 
@@ -191,38 +189,85 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-white">
       <div className="mx-auto max-w-6xl px-6 py-12">
-        {/* HERO */}
-        <section className="mt-2">
-          <div className="inline-flex flex-wrap items-center gap-2 rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs text-neutral-600">
-            <span className="font-medium text-neutral-700">Real reviews for bartenders & servers</span>
-            <span>•</span>
-            <span>Tips</span>
-            <span>•</span>
-            <span>Hours</span>
-            <span>•</span>
-            <span>Expectations</span>
-          </div>
+        {/* Hero */}
+        <div className="grid gap-8 lg:grid-cols-2 lg:items-start">
+          {/* Left: headline */}
+          <section className="pt-2">
+            <div className="inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-4 py-2 text-xs text-neutral-700">
+              <span>Real reviews for bartenders &amp; servers</span>
+              <span className="text-neutral-300">•</span>
+              <span>Tips</span>
+              <span className="text-neutral-300">•</span>
+              <span>Hours</span>
+              <span className="text-neutral-300">•</span>
+              <span>Expectations</span>
+            </div>
 
-          <h1 className="mt-6 text-4xl font-bold tracking-tight sm:text-5xl">
-            Know the tips <span className="text-neutral-400">before</span>
-            <br className="hidden sm:block" />
-            you take the job.
-          </h1>
+            <h1 className="mt-6 text-5xl font-bold tracking-tight sm:text-6xl">
+              Know the tips{" "}
+              <span className="text-neutral-400">before</span>{" "}
+              {/* FIX: explicit spacing so it never becomes "beforeyou" */}
+              you take the job.
+            </h1>
 
-          <p className="mt-4 max-w-2xl text-base leading-relaxed text-neutral-600">
-            Search a bar or restaurant and see what staff actually report: average tips,
-            seasonality, tip pool setup, and whether they’d recommend the gig.
-          </p>
+            <p className="mt-5 max-w-xl text-lg text-neutral-700">
+              Search a bar or restaurant and see what staff actually report: average tips,
+              seasonality, tip pool setup, and whether they’d recommend the gig.
+            </p>
 
-          <p className="mt-3 text-sm text-neutral-500">
-            Tip reporting note: entries may be labeled as pre-tax or post-tax.
-          </p>
-        </section>
+            <p className="mt-4 text-sm text-neutral-500">
+              Tip reporting note: entries may be labeled as pre-tax or post-tax.
+            </p>
+          </section>
 
-        {/* Two-column area (mobile stacks) */}
+          {/* Right: (optional) spacer area or future preview card */}
+          <section className="hidden lg:block">
+            <div className="rounded-3xl border border-neutral-200 bg-neutral-50 p-6">
+              <div className="text-sm font-semibold text-neutral-800">What you’ll see</div>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border border-neutral-200 bg-white p-4">
+                  <div className="text-xs text-neutral-500">Avg tips / wk</div>
+                  <div className="mt-1 text-lg font-semibold">$ —</div>
+                </div>
+                <div className="rounded-2xl border border-neutral-200 bg-white p-4">
+                  <div className="text-xs text-neutral-500">Avg hours / wk</div>
+                  <div className="mt-1 text-lg font-semibold">—</div>
+                </div>
+                <div className="rounded-2xl border border-neutral-200 bg-white p-4">
+                  <div className="text-xs text-neutral-500">Tip pool</div>
+                  <div className="mt-1 text-lg font-semibold">—</div>
+                </div>
+                <div className="rounded-2xl border border-neutral-200 bg-white p-4">
+                  <div className="text-xs text-neutral-500">Recommended</div>
+                  <div className="mt-1 text-lg font-semibold">—</div>
+                </div>
+              </div>
+
+              <div className="mt-5 flex gap-3">
+                <Link
+                  href="/#browse"
+                  className="flex-1 rounded-xl border border-neutral-200 bg-white px-4 py-3 text-center text-sm font-medium hover:bg-neutral-50"
+                >
+                  Browse venues
+                </Link>
+                <Link
+                  href="/#add-venue"
+                  className="flex-1 rounded-xl bg-black px-4 py-3 text-center text-sm font-medium text-white hover:opacity-90"
+                >
+                  Add a venue
+                </Link>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        {/* Two-column area (mobile: Add first, Browse second) */}
         <div className="mt-10 grid gap-6 lg:grid-cols-2">
-          {/* FIRST (mobile) / LEFT (desktop): Add a venue */}
-          <section id="add-venue" className="rounded-2xl border border-neutral-200 p-6">
+          {/* ADD (mobile first) */}
+          <section
+            id="add-venue"
+            className="order-1 rounded-2xl border border-neutral-200 p-6 lg:order-2"
+          >
             <h2 className="text-xl font-semibold">Add a venue</h2>
             <p className="mt-1 text-sm text-neutral-600">
               Use Google autocomplete to reduce typos (manual entry still works).
@@ -295,8 +340,11 @@ export default function Home() {
             </form>
           </section>
 
-          {/* SECOND (mobile) / RIGHT (desktop): Browse venues */}
-          <section id="browse" className="rounded-2xl border border-neutral-200 p-6">
+          {/* BROWSE (mobile second) */}
+          <section
+            id="browse"
+            className="order-2 rounded-2xl border border-neutral-200 p-6 lg:order-1"
+          >
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-xl font-semibold">Browse venues</h2>

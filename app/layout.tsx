@@ -44,7 +44,6 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} subpixel-antialiased text-neutral-900`}
         style={{
-          // Defensive: nudges "reader/darkening" tools to keep contrast sane
           backgroundColor: "#ffffff",
           color: "#171717",
         }}
@@ -59,7 +58,7 @@ export default function RootLayout({
 
         {/* Header */}
         <header className="sticky top-0 z-40 border-b border-neutral-200 bg-white/90 backdrop-blur">
-          <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4">
             {/* Left: brand */}
             <Link href="/" className="flex items-center gap-3">
               <span aria-hidden="true" className="h-9 w-9 rounded-2xl bg-black" />
@@ -82,11 +81,11 @@ export default function RootLayout({
             </nav>
 
             {/* Right: actions */}
-            <div className="flex items-center gap-2">
-              {/* Mobile-only "How it works" so it doesn't disappear on small screens */}
+            <div className="flex items-center gap-3">
+              {/* Mobile-friendly: simple text link (less crowded than a button/pill) */}
               <Link
                 href="/how-it-works"
-                className="inline-flex rounded-xl border border-neutral-200 px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 md:hidden"
+                className="text-sm text-neutral-700 hover:text-neutral-900 md:hidden"
               >
                 How it works
               </Link>
