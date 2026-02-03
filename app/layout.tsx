@@ -50,7 +50,11 @@ export default function RootLayout({
         }}
       >
         {googleSrc ? (
-          <Script id="google-maps-js" src={googleSrc} strategy="afterInteractive" />
+          <Script
+            id="google-maps-js"
+            src={googleSrc}
+            strategy="afterInteractive"
+          />
         ) : null}
 
         {/* Header */}
@@ -58,10 +62,7 @@ export default function RootLayout({
           <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
             {/* Left: brand */}
             <Link href="/" className="flex items-center gap-3">
-              <span
-                aria-hidden="true"
-                className="h-9 w-9 rounded-2xl bg-black"
-              />
+              <span aria-hidden="true" className="h-9 w-9 rounded-2xl bg-black" />
               <span className="text-base font-semibold text-neutral-900">
                 KnowTheTips
               </span>
@@ -83,16 +84,6 @@ export default function RootLayout({
 
             {/* Right: actions */}
             <div className="flex items-center gap-2">
-              {/* Placeholder (won't break anything). You can wire this later. */}
-              <button
-                type="button"
-                className="hidden rounded-xl border border-neutral-200 px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 md:inline-flex"
-                title="Sign in coming soon"
-                disabled
-              >
-                Sign in
-              </button>
-
               <Link
                 href="/#add-venue"
                 className="inline-flex rounded-xl bg-black px-4 py-2 text-sm font-medium text-white hover:opacity-90"
