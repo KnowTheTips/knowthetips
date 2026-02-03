@@ -73,7 +73,6 @@ export default function RootLayout({
               <Link href="/how-it-works" className="hover:text-neutral-900">
                 How it works
               </Link>
-              {/* These can point to sections on the homepage if you want */}
               <Link href="/#browse" className="hover:text-neutral-900">
                 Browse
               </Link>
@@ -84,6 +83,14 @@ export default function RootLayout({
 
             {/* Right: actions */}
             <div className="flex items-center gap-2">
+              {/* Mobile-only "How it works" so it doesn't disappear on small screens */}
+              <Link
+                href="/how-it-works"
+                className="inline-flex rounded-xl border border-neutral-200 px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 md:hidden"
+              >
+                How it works
+              </Link>
+
               <Link
                 href="/#add-venue"
                 className="inline-flex rounded-xl bg-black px-4 py-2 text-sm font-medium text-white hover:opacity-90"
