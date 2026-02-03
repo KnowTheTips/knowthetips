@@ -191,18 +191,38 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-white">
       <div className="mx-auto max-w-6xl px-6 py-12">
-        {/* Title */}
-        <div>
-          <h1 className="text-4xl font-bold tracking-tight">KnowTheTips</h1>
-          <p className="mt-2 text-neutral-600">
-            Anonymous venue insights for bartenders and servers.
-          </p>
-        </div>
+        {/* HERO */}
+        <section className="mt-2">
+          <div className="inline-flex flex-wrap items-center gap-2 rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs text-neutral-600">
+            <span className="font-medium text-neutral-700">Real reviews for bartenders & servers</span>
+            <span>•</span>
+            <span>Tips</span>
+            <span>•</span>
+            <span>Hours</span>
+            <span>•</span>
+            <span>Expectations</span>
+          </div>
 
-        {/* Two-column hero area */}
+          <h1 className="mt-6 text-4xl font-bold tracking-tight sm:text-5xl">
+            Know the tips <span className="text-neutral-400">before</span>
+            <br className="hidden sm:block" />
+            you take the job.
+          </h1>
+
+          <p className="mt-4 max-w-2xl text-base leading-relaxed text-neutral-600">
+            Search a bar or restaurant and see what staff actually report: average tips,
+            seasonality, tip pool setup, and whether they’d recommend the gig.
+          </p>
+
+          <p className="mt-3 text-sm text-neutral-500">
+            Tip reporting note: entries may be labeled as pre-tax or post-tax.
+          </p>
+        </section>
+
+        {/* Two-column area (mobile stacks) */}
         <div className="mt-10 grid gap-6 lg:grid-cols-2">
           {/* FIRST (mobile) / LEFT (desktop): Add a venue */}
-          <section className="rounded-2xl border border-neutral-200 p-6">
+          <section id="add-venue" className="rounded-2xl border border-neutral-200 p-6">
             <h2 className="text-xl font-semibold">Add a venue</h2>
             <p className="mt-1 text-sm text-neutral-600">
               Use Google autocomplete to reduce typos (manual entry still works).
@@ -276,7 +296,7 @@ export default function Home() {
           </section>
 
           {/* SECOND (mobile) / RIGHT (desktop): Browse venues */}
-          <section className="rounded-2xl border border-neutral-200 p-6">
+          <section id="browse" className="rounded-2xl border border-neutral-200 p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-xl font-semibold">Browse venues</h2>
@@ -336,7 +356,6 @@ export default function Home() {
               <span className="font-medium">{venues.length}</span>
             </p>
 
-            {/* Results list */}
             <div className="mt-4 grid gap-3">
               {venuesLoading ? (
                 <p className="text-neutral-600">Loading venues…</p>
