@@ -27,6 +27,7 @@ type Review = {
   earnings_label: string;
   created_at: string;
   is_hidden: boolean | null;
+  reviewer_token?: string | null;
 };
 
 type CityRow = { city: string | null };
@@ -124,12 +125,12 @@ function FlagIcon({ className = "" }: { className?: string }) {
 
 /** ---------------------------
  * Anti-spam: anonymous reviewer token
+ * (DB is the source of truth; localStorage is just UX cache)
  * --------------------------- */
 const ANON_TOKEN_KEY = "kt_anon_token";
 const reviewedKey = (venueId: string) => `kt_reviewed_${venueId}`;
 
 function randomToken() {
-  // Simple, stable-enough token for anon users (not security-sensitive)
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
@@ -142,17 +143,7 @@ function getOrCreateAnonToken(): string {
     window.localStorage.setItem(ANON_TOKEN_KEY, created);
     return created;
   } catch {
-    // If localStorage is blocked, we fall back to in-memory behavior (no hard block possible)
     return "";
-  }
-}
-
-function hasReviewedVenue(venueId: string): boolean {
-  if (typeof window === "undefined") return false;
-  try {
-    return window.localStorage.getItem(reviewedKey(venueId)) === "1";
-  } catch {
-    return false;
   }
 }
 
@@ -162,6 +153,15 @@ function markReviewedVenue(venueId: string) {
     window.localStorage.setItem(reviewedKey(venueId), "1");
   } catch {
     // ignore
+  }
+}
+
+function hasReviewedVenueCache(venueId: string): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(reviewedKey(venueId)) === "1";
+  } catch {
+    return false;
   }
 }
 
@@ -209,13 +209,10 @@ export default function VenuePage() {
   const [reportError, setReportError] = useState<string | null>(null);
   const [reportedReviewIds, setReportedReviewIds] = useState<Set<string>>(() => new Set());
 
-  // Anti-spam (one review per venue per browser/device)
+  // Anti-spam
   const [anonToken, setAnonToken] = useState<string>("");
   const [alreadyReviewedHere, setAlreadyReviewedHere] = useState(false);
-
-  // NEW: prevent double-submit
-  const [reviewSubmitting, setReviewSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [reviewLockLoading, setReviewLockLoading] = useState(false);
 
   function openReport(reviewId: string) {
     setReportError(null);
@@ -266,7 +263,6 @@ export default function VenuePage() {
     if (error) return;
 
     const rows = (data || []) as CityRow[];
-
     const set = new Set<string>();
     for (const row of rows) {
       if (row.city) set.add(titleCase(row.city));
@@ -301,7 +297,6 @@ export default function VenuePage() {
     setVenueLoading(false);
   }
 
-  // include rows where is_hidden is NULL or false
   async function loadReviews() {
     if (!venueId) return;
 
@@ -311,7 +306,7 @@ export default function VenuePage() {
     const reviewsRes = await supabase
       .from("reviews")
       .select(
-        "id,venue_id,role,tips_weekly,hours_weekly,tip_pool,busy_season,recommended,comment,earnings_label,created_at,is_hidden"
+        "id,venue_id,role,tips_weekly,hours_weekly,tip_pool,busy_season,recommended,comment,earnings_label,created_at,is_hidden,reviewer_token"
       )
       .eq("venue_id", venueId)
       .not("is_hidden", "is", true)
@@ -362,18 +357,49 @@ export default function VenuePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [venueId]);
 
-  // Setup anon token + localStorage review lock for this venue (token-ready gating)
+  // Create/restore anon token when entering a venue page
   useEffect(() => {
     if (!venueId) return;
     const tok = getOrCreateAnonToken();
     setAnonToken(tok);
 
-    // Only apply the "already reviewed" lock if token exists (stable identity)
-    if (tok) {
-      setAlreadyReviewedHere(hasReviewedVenue(venueId));
-    } else {
-      setAlreadyReviewedHere(false);
+    // Don’t immediately lock based on localStorage alone (it can be wrong).
+    // But we can use it as a fast optimistic hint while we verify via DB.
+    setAlreadyReviewedHere(hasReviewedVenueCache(venueId));
+  }, [venueId]);
+
+  // DB truth check: does this reviewer_token already have a review for this venue?
+  useEffect(() => {
+    async function check() {
+      if (!venueId) return;
+
+      const tok = getOrCreateAnonToken();
+      if (!tok) {
+        // If we can’t get a token (storage blocked), we can’t enforce per-device reliably.
+        setAlreadyReviewedHere(false);
+        return;
+      }
+
+      setReviewLockLoading(true);
+
+      const { data, error } = await supabase
+        .from("reviews")
+        .select("id")
+        .eq("venue_id", venueId)
+        .eq("reviewer_token", tok)
+        .limit(1);
+
+      if (!error && (data?.length ?? 0) > 0) {
+        setAlreadyReviewedHere(true);
+        markReviewedVenue(venueId);
+      } else {
+        setAlreadyReviewedHere(false);
+      }
+
+      setReviewLockLoading(false);
     }
+
+    check();
   }, [venueId]);
 
   const reviewCountLabel = useMemo(() => {
@@ -400,11 +426,9 @@ export default function VenuePage() {
     const tipPoolYes = tipPoolKnown.filter((r) => r.tip_pool === true).length;
 
     const avgTips = tipsVals.length > 0 ? tipsVals.reduce((a, b) => a + b, 0) / tipsVals.length : null;
-
     const avgHours = hoursVals.length > 0 ? hoursVals.reduce((a, b) => a + b, 0) / hoursVals.length : null;
 
     const pctRecommended = total > 0 ? (recommendedCount / total) * 100 : null;
-
     const pctTipPool = tipPoolKnown.length > 0 ? (tipPoolYes / tipPoolKnown.length) * 100 : null;
 
     return {
@@ -489,16 +513,7 @@ export default function VenuePage() {
     e.preventDefault();
     if (!venueId) return;
 
-    // prevent double submits
-    if (reviewSubmitting) return;
-
-    // Ensure token is ready (prevents weird first-submit edge cases)
-    if (!anonToken) {
-      alert("One sec — getting your anonymous token. Please try again.");
-      return;
-    }
-
-    // Frontend safeguard (browser/device)
+    // If the DB says you already reviewed, block.
     if (alreadyReviewedHere) {
       alert("You’ve already submitted a review for this venue from this device.");
       return;
@@ -517,6 +532,9 @@ export default function VenuePage() {
       return alert("Hours weekly must be a valid number (or blank).");
     }
 
+    // Ensure token exists right now (don’t rely on state timing)
+    const tok = getOrCreateAnonToken();
+
     const payload: any = {
       venue_id: venueId,
       role: roleValue,
@@ -527,52 +545,40 @@ export default function VenuePage() {
       hours_weekly: hours,
       tip_pool: tipPool,
       busy_season: busySeason.trim() || null,
-
-      // DB enforcement layer (unique index should be venue_id + reviewer_token)
-      reviewer_token: anonToken,
+      reviewer_token: tok || null,
     };
 
-    setReviewSubmitting(true);
-    setSubmitError(null);
+    const { error } = await supabase.from("reviews").insert(payload);
 
-    try {
-      // select() helps ensure PostgREST returns a row and avoids some confusing client behavior
-      const { error } = await supabase.from("reviews").insert(payload).select("id").single();
+    if (error) {
+      const msg = (error as any)?.message || "Unknown error";
+      const code = (error as any)?.code;
 
-      if (error) {
-        const msg = (error as any)?.message || "Unknown error";
-        const code = (error as any)?.code;
-
-        // Unique violation usually 23505; also handle message containing duplicate
-        if (code === "23505" || msg.toLowerCase().includes("duplicate")) {
-          markReviewedVenue(venueId);
-          setAlreadyReviewedHere(true);
-          alert("Looks like you already submitted a review for this venue from this device.");
-          return;
-        }
-
-        setSubmitError(msg);
-        alert("Error adding review: " + msg);
+      // Unique violation: the DB prevented a duplicate (good).
+      if (code === "23505" || msg.toLowerCase().includes("duplicate")) {
+        setAlreadyReviewedHere(true);
+        markReviewedVenue(venueId);
+        alert("You’ve already submitted a review for this venue from this device.");
         return;
       }
 
-      // Mark this device as having reviewed this venue
-      markReviewedVenue(venueId);
-      setAlreadyReviewedHere(true);
-
-      setRecommended(false);
-      setComment("");
-      setTipsWeekly("");
-      setHoursWeekly("");
-      setTipPool(false);
-      setBusySeason("");
-      setEarningsLabel("pre-tax");
-      setRole("server");
-
-      await loadReviews();
-    } finally {
-      setReviewSubmitting(false);
+      return alert("Error adding review: " + msg);
     }
+
+    // Success: now mark local cache + UI lock
+    markReviewedVenue(venueId);
+    setAlreadyReviewedHere(true);
+
+    setRecommended(false);
+    setComment("");
+    setTipsWeekly("");
+    setHoursWeekly("");
+    setTipPool(false);
+    setBusySeason("");
+    setEarningsLabel("pre-tax");
+    setRole("server");
+
+    await loadReviews();
   }
 
   if (!venueId) {
@@ -587,6 +593,8 @@ export default function VenuePage() {
       </main>
     );
   }
+
+  const formDisabled = alreadyReviewedHere || reviewLockLoading;
 
   return (
     <main className="min-h-screen bg-white">
@@ -727,22 +735,20 @@ export default function VenuePage() {
               )}
             </section>
 
-            {/* Add a review (separate bubble, ABOVE Reviews) */}
+            {/* Add a review */}
             <section className="mt-10 rounded-2xl border border-neutral-200 p-6">
               <h2 className="text-2xl font-semibold">Add a review</h2>
 
-              {alreadyReviewedHere ? (
+              {reviewLockLoading ? (
+                <div className="mt-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-700">
+                  Checking review status…
+                </div>
+              ) : alreadyReviewedHere ? (
                 <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                   You’ve already submitted a review for this venue from this device.
                   <div className="mt-1 text-xs text-amber-800">
                     (This is a simple anti-spam safeguard while the site remains login-free.)
                   </div>
-                </div>
-              ) : null}
-
-              {submitError ? (
-                <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-                  {submitError}
                 </div>
               ) : null}
 
@@ -755,7 +761,7 @@ export default function VenuePage() {
                       value={role}
                       onChange={(e) => setRole(e.target.value)}
                       placeholder="server, bartender…"
-                      disabled={alreadyReviewedHere || reviewSubmitting}
+                      disabled={formDisabled}
                     />
                   </label>
 
@@ -765,7 +771,7 @@ export default function VenuePage() {
                       className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
                       value={earningsLabel}
                       onChange={(e) => setEarningsLabel(e.target.value as "pre-tax" | "post-tax")}
-                      disabled={alreadyReviewedHere || reviewSubmitting}
+                      disabled={formDisabled}
                     >
                       <option value="pre-tax">pre-tax</option>
                       <option value="post-tax">post-tax</option>
@@ -782,7 +788,7 @@ export default function VenuePage() {
                       value={tipsWeekly}
                       onChange={(e) => setTipsWeekly(e.target.value)}
                       placeholder="e.g. 1200"
-                      disabled={alreadyReviewedHere || reviewSubmitting}
+                      disabled={formDisabled}
                     />
                   </label>
 
@@ -794,7 +800,7 @@ export default function VenuePage() {
                       value={hoursWeekly}
                       onChange={(e) => setHoursWeekly(e.target.value)}
                       placeholder="e.g. 32"
-                      disabled={alreadyReviewedHere || reviewSubmitting}
+                      disabled={formDisabled}
                     />
                   </label>
                 </div>
@@ -805,7 +811,7 @@ export default function VenuePage() {
                       type="checkbox"
                       checked={recommended}
                       onChange={(e) => setRecommended(e.target.checked)}
-                      disabled={alreadyReviewedHere || reviewSubmitting}
+                      disabled={formDisabled}
                     />
                     <span className="text-sm">Recommended</span>
                   </label>
@@ -815,7 +821,7 @@ export default function VenuePage() {
                       type="checkbox"
                       checked={tipPool}
                       onChange={(e) => setTipPool(e.target.checked)}
-                      disabled={alreadyReviewedHere || reviewSubmitting}
+                      disabled={formDisabled}
                     />
                     <span className="text-sm">Tip pool</span>
                   </label>
@@ -828,30 +834,29 @@ export default function VenuePage() {
                     value={busySeason}
                     onChange={(e) => setBusySeason(e.target.value)}
                     placeholder="Summer, holidays, year-round…"
-                    disabled={alreadyReviewedHere || reviewSubmitting}
+                    disabled={formDisabled}
                   />
                 </label>
 
                 <label className="grid gap-2">
                   <span className="text-sm font-medium">Comment (optional)</span>
                   <textarea
-                    className="min-h-[110px] w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
+                    className="min-h-[110px] w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ringing-2 focus:ring-neutral-300"
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
                     placeholder="Anonymous notes about management, volume, schedule…"
-                    disabled={alreadyReviewedHere || reviewSubmitting}
+                    disabled={formDisabled}
                   />
                 </label>
 
                 <div className="flex gap-2">
                   <button
                     type="submit"
-                    disabled={alreadyReviewedHere || reviewSubmitting}
+                    disabled={formDisabled}
                     className="rounded-xl bg-black px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
                   >
-                    {reviewSubmitting ? "Submitting…" : "Submit review"}
+                    Submit review
                   </button>
-
                   <button
                     type="button"
                     onClick={() => {
@@ -864,7 +869,7 @@ export default function VenuePage() {
                       setEarningsLabel("pre-tax");
                       setRole("server");
                     }}
-                    disabled={alreadyReviewedHere || reviewSubmitting}
+                    disabled={formDisabled}
                     className="rounded-xl border border-neutral-200 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
                   >
                     Clear
@@ -873,7 +878,7 @@ export default function VenuePage() {
               </form>
             </section>
 
-            {/* Reviews (separate bubble, directly above sort controls + review list) */}
+            {/* Reviews */}
             <section className="mt-10 rounded-2xl border border-neutral-200 p-6">
               <h2 className="text-2xl font-semibold">Reviews</h2>
 
