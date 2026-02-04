@@ -213,6 +213,10 @@ export default function VenuePage() {
   const [anonToken, setAnonToken] = useState<string>("");
   const [alreadyReviewedHere, setAlreadyReviewedHere] = useState(false);
 
+  // NEW: prevent double-submit
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
   function openReport(reviewId: string) {
     setReportError(null);
     setReportReason("");
@@ -358,12 +362,18 @@ export default function VenuePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [venueId]);
 
-  // Setup anon token + localStorage review lock for this venue
+  // Setup anon token + localStorage review lock for this venue (token-ready gating)
   useEffect(() => {
     if (!venueId) return;
     const tok = getOrCreateAnonToken();
     setAnonToken(tok);
-    setAlreadyReviewedHere(hasReviewedVenue(venueId));
+
+    // Only apply the "already reviewed" lock if token exists (stable identity)
+    if (tok) {
+      setAlreadyReviewedHere(hasReviewedVenue(venueId));
+    } else {
+      setAlreadyReviewedHere(false);
+    }
   }, [venueId]);
 
   const reviewCountLabel = useMemo(() => {
@@ -429,7 +439,6 @@ export default function VenuePage() {
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       }
       if (reviewSort === "oldest") {
-        // FIXED: previously subtracted the same value from itself
         return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
       }
       if (reviewSort === "tips_desc") {
@@ -480,6 +489,15 @@ export default function VenuePage() {
     e.preventDefault();
     if (!venueId) return;
 
+    // prevent double submits
+    if (reviewSubmitting) return;
+
+    // Ensure token is ready (prevents weird first-submit edge cases)
+    if (!anonToken) {
+      alert("One sec — getting your anonymous token. Please try again.");
+      return;
+    }
+
     // Frontend safeguard (browser/device)
     if (alreadyReviewedHere) {
       alert("You’ve already submitted a review for this venue from this device.");
@@ -511,40 +529,50 @@ export default function VenuePage() {
       busy_season: busySeason.trim() || null,
 
       // DB enforcement layer (unique index should be venue_id + reviewer_token)
-      reviewer_token: anonToken || null,
+      reviewer_token: anonToken,
     };
 
-    const { error } = await supabase.from("reviews").insert(payload);
+    setReviewSubmitting(true);
+    setSubmitError(null);
 
-    if (error) {
-      const msg = (error as any)?.message || "Unknown error";
-      const code = (error as any)?.code;
+    try {
+      // select() helps ensure PostgREST returns a row and avoids some confusing client behavior
+      const { error } = await supabase.from("reviews").insert(payload).select("id").single();
 
-      // Unique violation usually 23505; also handle message containing duplicate
-      if (code === "23505" || msg.toLowerCase().includes("duplicate")) {
-        markReviewedVenue(venueId);
-        setAlreadyReviewedHere(true);
-        alert("You’ve already submitted a review for this venue from this device.");
+      if (error) {
+        const msg = (error as any)?.message || "Unknown error";
+        const code = (error as any)?.code;
+
+        // Unique violation usually 23505; also handle message containing duplicate
+        if (code === "23505" || msg.toLowerCase().includes("duplicate")) {
+          markReviewedVenue(venueId);
+          setAlreadyReviewedHere(true);
+          alert("Looks like you already submitted a review for this venue from this device.");
+          return;
+        }
+
+        setSubmitError(msg);
+        alert("Error adding review: " + msg);
         return;
       }
 
-      return alert("Error adding review: " + msg);
+      // Mark this device as having reviewed this venue
+      markReviewedVenue(venueId);
+      setAlreadyReviewedHere(true);
+
+      setRecommended(false);
+      setComment("");
+      setTipsWeekly("");
+      setHoursWeekly("");
+      setTipPool(false);
+      setBusySeason("");
+      setEarningsLabel("pre-tax");
+      setRole("server");
+
+      await loadReviews();
+    } finally {
+      setReviewSubmitting(false);
     }
-
-    // Mark this device as having reviewed this venue
-    markReviewedVenue(venueId);
-    setAlreadyReviewedHere(true);
-
-    setRecommended(false);
-    setComment("");
-    setTipsWeekly("");
-    setHoursWeekly("");
-    setTipPool(false);
-    setBusySeason("");
-    setEarningsLabel("pre-tax");
-    setRole("server");
-
-    await loadReviews();
   }
 
   if (!venueId) {
@@ -705,10 +733,16 @@ export default function VenuePage() {
 
               {alreadyReviewedHere ? (
                 <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                  You’ve already submitted a review for this venue from this device.  
+                  You’ve already submitted a review for this venue from this device.
                   <div className="mt-1 text-xs text-amber-800">
                     (This is a simple anti-spam safeguard while the site remains login-free.)
                   </div>
+                </div>
+              ) : null}
+
+              {submitError ? (
+                <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                  {submitError}
                 </div>
               ) : null}
 
@@ -721,7 +755,7 @@ export default function VenuePage() {
                       value={role}
                       onChange={(e) => setRole(e.target.value)}
                       placeholder="server, bartender…"
-                      disabled={alreadyReviewedHere}
+                      disabled={alreadyReviewedHere || reviewSubmitting}
                     />
                   </label>
 
@@ -731,7 +765,7 @@ export default function VenuePage() {
                       className="w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:ring-2 focus:ring-neutral-300"
                       value={earningsLabel}
                       onChange={(e) => setEarningsLabel(e.target.value as "pre-tax" | "post-tax")}
-                      disabled={alreadyReviewedHere}
+                      disabled={alreadyReviewedHere || reviewSubmitting}
                     >
                       <option value="pre-tax">pre-tax</option>
                       <option value="post-tax">post-tax</option>
@@ -748,7 +782,7 @@ export default function VenuePage() {
                       value={tipsWeekly}
                       onChange={(e) => setTipsWeekly(e.target.value)}
                       placeholder="e.g. 1200"
-                      disabled={alreadyReviewedHere}
+                      disabled={alreadyReviewedHere || reviewSubmitting}
                     />
                   </label>
 
@@ -760,7 +794,7 @@ export default function VenuePage() {
                       value={hoursWeekly}
                       onChange={(e) => setHoursWeekly(e.target.value)}
                       placeholder="e.g. 32"
-                      disabled={alreadyReviewedHere}
+                      disabled={alreadyReviewedHere || reviewSubmitting}
                     />
                   </label>
                 </div>
@@ -771,7 +805,7 @@ export default function VenuePage() {
                       type="checkbox"
                       checked={recommended}
                       onChange={(e) => setRecommended(e.target.checked)}
-                      disabled={alreadyReviewedHere}
+                      disabled={alreadyReviewedHere || reviewSubmitting}
                     />
                     <span className="text-sm">Recommended</span>
                   </label>
@@ -781,7 +815,7 @@ export default function VenuePage() {
                       type="checkbox"
                       checked={tipPool}
                       onChange={(e) => setTipPool(e.target.checked)}
-                      disabled={alreadyReviewedHere}
+                      disabled={alreadyReviewedHere || reviewSubmitting}
                     />
                     <span className="text-sm">Tip pool</span>
                   </label>
@@ -794,7 +828,7 @@ export default function VenuePage() {
                     value={busySeason}
                     onChange={(e) => setBusySeason(e.target.value)}
                     placeholder="Summer, holidays, year-round…"
-                    disabled={alreadyReviewedHere}
+                    disabled={alreadyReviewedHere || reviewSubmitting}
                   />
                 </label>
 
@@ -805,18 +839,19 @@ export default function VenuePage() {
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
                     placeholder="Anonymous notes about management, volume, schedule…"
-                    disabled={alreadyReviewedHere}
+                    disabled={alreadyReviewedHere || reviewSubmitting}
                   />
                 </label>
 
                 <div className="flex gap-2">
                   <button
                     type="submit"
-                    disabled={alreadyReviewedHere}
+                    disabled={alreadyReviewedHere || reviewSubmitting}
                     className="rounded-xl bg-black px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
                   >
-                    Submit review
+                    {reviewSubmitting ? "Submitting…" : "Submit review"}
                   </button>
+
                   <button
                     type="button"
                     onClick={() => {
@@ -829,7 +864,7 @@ export default function VenuePage() {
                       setEarningsLabel("pre-tax");
                       setRole("server");
                     }}
-                    disabled={alreadyReviewedHere}
+                    disabled={alreadyReviewedHere || reviewSubmitting}
                     className="rounded-xl border border-neutral-200 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
                   >
                     Clear
